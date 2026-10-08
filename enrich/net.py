@@ -37,7 +37,8 @@ def log(msg: str) -> None:
 
 
 class RateLimiter:
-    def __init__(self):
+    def __init__(self, cache=None):
+        self.cache = cache          # cool-downs survive restarts
         self._last: dict[str, float] = {}
         self._count: dict[str, int] = {}
         self._blocked_until: dict[str, float] = {}
@@ -49,6 +50,8 @@ class RateLimiter:
     def wait(self, bucket: str) -> None:
         fam = self._family(bucket)
         until = self._blocked_until.get(bucket, 0)
+        if self.cache is not None:
+            until = max(until, float(self.cache.get_json("cooldown", bucket) or 0))
         if until > time.time():
             secs = until - time.time()
             log(f"  [rate] {bucket} cooling down {secs/60:.1f} min")
@@ -76,6 +79,8 @@ class RateLimiter:
         cool = min(config.BACKOFF_BASE * (2 ** s), config.BACKOFF_MAX) * max(config.DELAY_SCALE, 0.05)
         self._strikes[bucket] = s + 1
         self._blocked_until[bucket] = time.time() + cool
+        if self.cache is not None:
+            self.cache.set_json("cooldown", bucket, self._blocked_until[bucket])
         return cool
 
     def clear_strikes(self, bucket: str) -> None:
@@ -85,7 +90,7 @@ class RateLimiter:
 class Fetcher:
     def __init__(self, cache):
         self.cache = cache
-        self.limiter = RateLimiter()
+        self.limiter = RateLimiter(cache)
         self._session = cffi.Session(impersonate=config.IMPERSONATE)
         self._session.headers.update({"Accept-Language": config.ACCEPT_LANGUAGE})
 

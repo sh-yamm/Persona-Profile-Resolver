@@ -1,0 +1,12 @@
+curl_cffi>=0.16
+ddgs>=9.16
+lxml>=6.0
+numpy>=2.0
+opencv-python-headless>=4.10
+rapidfuzz>=3.14
+scikit-learn>=1.5
+tzdata
+# optional: anonymous-guest browser fallback (python run.py --browser-fallback)
+patchright>=1.60
+# tests
+pytest

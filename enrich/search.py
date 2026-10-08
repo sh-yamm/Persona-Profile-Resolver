@@ -81,7 +81,7 @@ class Searcher:
 
 def parse_snippet(title: str, body: str) -> dict:
     t = re.sub(r"\s*[|\-–]\s*LinkedIn.*$", "", title or "", flags=re.I).strip()
-    t = re.sub(r"\.\.\.$", "", t).strip()
+    t = t.split("...")[0].split("…")[0].strip()     # bing sometimes splices the next result after "..."
     parts = [p.strip() for p in re.split(r"\s+[-–—|]\s+", t) if p.strip()]
     out = {"name": parts[0] if parts else "", "headline": "", "company": "",
            "location": "", "education": "", "text": f"{title} {body}"}
