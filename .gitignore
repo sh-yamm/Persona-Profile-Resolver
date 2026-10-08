@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+cache/
+out/
+models/*.onnx
+# task material and personal data are kept out of the public repo
+*.pdf
+dataset*.json
+data/labels.json
+tests/fixtures/*.html
+tests/fixtures/*.jpg
+scrape_linkedin.py
