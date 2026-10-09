@@ -127,3 +127,22 @@ def test_missing_data_is_not_mismatch():
     c = _cand()
     features.extract(p, c, {})
     assert c.levels["company"] is None and c.levels["face"] is None
+
+
+POST_HTML = """<html><head><script type="application/ld+json">{"@context":"http://schema.org",
+ "@type":"SocialMediaPosting","articleBody":"Hiring a principal security engineer",
+ "author":{"@type":"Person","name":"\ud83d\udd0fJane. Doe","url":"https://uk.linkedin.com/in/janeqdoe",
+  "image":{"@type":"ImageObject","url":"https://media.licdn.com/dms/image/x/profile-displayphoto.jpg"},
+  "interactionStatistic":{"@type":"InteractionCounter","userInteractionCount":1366}}}</script></head></html>"""
+
+
+def test_post_author_parsing_and_matching():
+    from enrich.linkedin import parse_post_html
+    from enrich.search import profile_from_post
+    d = parse_post_html(POST_HTML, "https://www.linkedin.com/posts/janeqdoe_hiring-activity-1-x")
+    assert d["author_image"].endswith("profile-displayphoto.jpg") and d["followers"] == 1366
+    assert canonical_profile(d["author_url"]) == "https://www.linkedin.com/in/janeqdoe"
+    assert profile_from_post("https://www.linkedin.com/posts/janeqdoe_hiring-activity-1-x") == "https://www.linkedin.com/in/janeqdoe"
+    # emoji / punctuation in the display name must not break the name match
+    p = persona.build({"name": "Jane Doe"})
+    assert features.name_level(p, d["author_name"])[0] == "full"

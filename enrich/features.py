@@ -20,6 +20,7 @@ class Candidate:
     url: str
     sources: set = field(default_factory=set)        # website / bluesky / search:tight / search:loose / slug
     snippets: list = field(default_factory=list)     # parsed snippet dicts
+    post_urls: list = field(default_factory=list)    # linkedin.com/posts/<slug>_... by this person
     best_rank: int = 99
     page_profiles: int = 99                           # profiles on the linking web page
     profile: Profile | None = None

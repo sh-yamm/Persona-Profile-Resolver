@@ -156,6 +156,8 @@ class Resolver:
                             "location": "", "education": "",
                             "text": f"{r['title']} {r['body']}"}
                     self._add(pool, url, f"search:{tier}", snip, rank + 2)
+                    if r["href"] not in pool[url].post_urls:
+                        pool[url].post_urls.append(r["href"])
             if pool:
                 ranked = self._score_pool(p, pool, extras)
                 if ranked[0].prob >= config.STRONG_SNIPPET_SCORE and ranked[0].levels.get("name") == "full":
@@ -192,8 +194,29 @@ class Resolver:
                 c.face_sim = self.face.similarity(persona_face, self.face.embedding(c.profile.image_url))
             self._score_pool(p, pool, extras)
 
+        # profile page walled? posts are still served to guests and carry the author's
+        # name, photo and writing -> enough for name, face and keyword evidence
+        for c in to_fetch:
+            if c.url not in pool or (c.profile and c.profile.ok) or self._decided(pool):
+                continue
+            prof = self.li.author_from_posts(c.url, c.post_urls or self._find_posts(c.url))
+            if prof:
+                log(f"  [posts] {c.url} <- author {prof.name!r}, photo={'yes' if prof.image_url else 'no'}")
+                c.profile = prof
+                if persona_face and prof.image_url:
+                    c.face_sim = self.face.similarity(persona_face, self.face.embedding(prof.image_url))
+                self._score_pool(p, pool, extras)
+
         ranked = self._score_pool(p, pool, extras)
         return self._result(p, ranked, persona_face is not None)
+
+    def _find_posts(self, profile_url: str) -> list[str]:
+        slug = search.slug_of(profile_url)
+        out = []
+        for r in self.searcher.search(f"linkedin.com/posts/{slug}", max_results=8):
+            if search.profile_from_post(r["href"]) == profile_url and r["href"] not in out:
+                out.append(r["href"])
+        return out
 
     def _result(self, p, ranked: list[Candidate], persona_face: bool = False) -> dict:
         best = ranked[0] if ranked else None
@@ -270,4 +293,5 @@ def _profile_summary(c: Candidate) -> dict:
     v = c.view()
     return {"name": v["name"], "headline": (v["headlines"] or [""])[0],
             "companies": list(dict.fromkeys(v["companies"]))[:4], "location": v["location"],
-            "fetched": v["fetched"], "sources": sorted(c.sources)}
+            "fetched": v["fetched"], "via": (c.profile.source if c.profile and c.profile.ok else "snippet"),
+            "sources": sorted(c.sources)}

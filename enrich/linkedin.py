@@ -172,6 +172,39 @@ def parse_profile_html(src: str, url: str) -> Profile:
     return p
 
 
+def parse_post_html(src: str, url: str) -> dict | None:
+    """Guest post page -> author facts. Post pages stay readable for guests even when
+    profile pages are walled, and their JSON-LD names the author with profile URL,
+    profile photo and follower count."""
+    try:
+        tree = lh.fromstring(src)
+    except Exception:
+        return None
+    for block in tree.xpath("//script[@type='application/ld+json']/text()"):
+        try:
+            d = json.loads(block)
+        except Exception:
+            continue
+        if d.get("@type") not in ("SocialMediaPosting", "DiscussionForumPosting", "Article"):
+            continue
+        a = d.get("author") or {}
+        img = a.get("image")
+        img = (img.get("url") or img.get("contentUrl")) if isinstance(img, dict) else (img or "")
+        if not img:   # JSON-LD sometimes omits it; the author avatar <img> still has it
+            for el in tree.xpath("//img[starts-with(@alt, 'View profile for')]"):
+                u = el.get("data-delayed-url") or el.get("src") or ""
+                if "profile-displayphoto" in u:
+                    img = u
+                    break
+        stats = a.get("interactionStatistic") or {}
+        return {"post_url": url, "author_name": _clean(a.get("name")),
+                "author_url": a.get("url", ""), "author_image": img or "",
+                "followers": stats.get("userInteractionCount") if isinstance(stats, dict) else None,
+                "text": _clean(d.get("articleBody") or d.get("headline"))[:1500],
+                "date": d.get("datePublished", "")}
+    return None
+
+
 class LinkedInClient:
     def __init__(self, fetcher, cache):
         self.fetcher = fetcher
@@ -233,6 +266,33 @@ class LinkedInClient:
         prof.source = "browser"
         if not prof.ok:
             prof.error = f"unparsed HTTP {status}"
+        return prof
+
+    def author_from_posts(self, profile_url: str, post_urls: list[str], max_posts: int = 2) -> Profile | None:
+        """Build a (partial) Profile for profile_url from the author block of its posts."""
+        from .search import canonical_profile
+        prof = None
+        for pu in post_urls[:max_posts]:
+            data = self.cache.get_json("post", pu)
+            if data is None:
+                if config.OFFLINE:
+                    continue
+                try:
+                    r = self.fetcher.get(pu, bucket="linkedin:posts", cache_ns=None, linkedin=True)
+                except Blocked as e:
+                    log(f"  [posts] blocked on {pu[:70]}: {e}")
+                    break
+                data = parse_post_html(r.text, pu) or {}
+                self.cache.set_json("post", pu, data)
+            if not data or canonical_profile(data.get("author_url", "")) != profile_url:
+                continue                      # a repost / someone else's post
+            if prof is None:
+                prof = Profile(url=profile_url, ok=True, source="post", name=data["author_name"],
+                               image_url=data["author_image"])
+            if data.get("text"):
+                prof.posts.append(data["text"])
+            if not prof.image_url and data.get("author_image"):
+                prof.image_url = data["author_image"]
         return prof
 
     def close(self):

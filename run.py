@@ -61,6 +61,7 @@ def main():
     if args.limit:
         personas = personas[:args.limit]
 
+    _lock = _single_instance_lock(config.CACHE_DB.parent / "run.lock")  # noqa: F841 (held open)
     cache = Cache(config.CACHE_DB)
     fetcher = Fetcher(cache)
     face = None
@@ -119,6 +120,24 @@ def main():
     for r in results:
         by[r["status"]] = by.get(r["status"], 0) + 1
     log(f"done in {(time.time() - t0) / 60:.1f} min: {by}  -> {out / 'results.json'}")
+
+
+def _single_instance_lock(path: Path):
+    """Two concurrent runs would share the cache, double the request rate and fight over
+    the log. Hold an OS-level exclusive lock for the whole run (released on exit/crash)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fh = open(path, "a+")
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        sys.exit(f"another run.py is already running (lock: {path}); stop it first")
+    return fh
 
 
 def _needs_refetch(r: dict) -> bool:
