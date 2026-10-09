@@ -82,15 +82,21 @@ class RateLimiter:
 
     def strike(self, bucket: str) -> float:
         s = self._strikes.get(bucket, 0)
+        if self.cache is not None:          # escalation survives restarts too
+            s = max(s, int(self.cache.get_json("strikes", bucket) or 0))
         cool = min(config.BACKOFF_BASE * (2 ** s), config.BACKOFF_MAX) * max(config.DELAY_SCALE, 0.05)
         self._strikes[bucket] = s + 1
         self._blocked_until[bucket] = time.time() + cool
         if self.cache is not None:
             self.cache.set_json("cooldown", bucket, self._blocked_until[bucket])
+            self.cache.set_json("strikes", bucket, s + 1)
         return cool
 
     def clear_strikes(self, bucket: str) -> None:
-        self._strikes.pop(bucket, None)
+        if self._strikes.pop(bucket, None) is not None and self.cache is not None:
+            self.cache.delete("strikes", bucket)
+        elif self.cache is not None and self.cache.get_json("strikes", bucket):
+            self.cache.delete("strikes", bucket)
 
 
 class Fetcher:

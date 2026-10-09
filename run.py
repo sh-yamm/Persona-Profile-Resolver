@@ -89,10 +89,11 @@ def main():
         # second pass: personas whose candidates could not be fetched because LinkedIn
         # was cooling down. Search results are cached, so this only costs profile fetches.
         # LinkedIn's guest budget can be ~1 request per cool-down window, so wait the
-        # cool-down out before *each* persona, most promising (highest confidence) first.
+        # cool-down out before *each* persona. Spend it where a fetch can change the
+        # decision: most uncertain first (confidence nearest 0.5), already-certain last.
         for rnd in range(0 if args.no_retry_pass else args.retry_rounds):
             pending = sorted((i for i, r in enumerate(results) if _needs_refetch(r)),
-                             key=lambda i: -results[i].get("confidence", 0))
+                             key=lambda i: abs(results[i].get("confidence", 0) - 0.5))
             if not pending:
                 break
             log(f"retry round {rnd + 1}: {len(pending)} persona(s) still need a profile fetch")
