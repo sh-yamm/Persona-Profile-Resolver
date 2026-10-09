@@ -128,17 +128,21 @@ class Resolver:
 
     # --------------------------------------------------------------------- main
     def resolve(self, raw: dict) -> dict:
+        """Same staged pipeline for every persona:
+        1 enrich persona from its own websites / social bios
+        2 candidates: persona-published links + search ladder (+ post authors, slug guesses)
+        3 evidence for the leading candidates: profile page -> posts -> company facts
+        4 face sweep: every plausible candidate gets a photo comparison (if the persona has a face)
+        5 score, calibrate, decide"""
         p = persona_mod.build(raw, self.llm)
-        p.rare_terms = _distinctive(p)
-        log(f"=== {p.display_name!r} ({p.kind}) companies={p.companies} titles={p.titles[:2]}")
-        pool: dict[str, Candidate] = {}
 
-        # 1) links the persona publishes itself
-        direct, extras = persona_links(p, self.fetcher)
-        if extras.get("bsky_bio"):
-            more = persona_mod.parse_intro(extras["bsky_bio"])
-            p.weak_companies += [c for c in more["companies"] if c not in p.companies]
-            p.keywords = list(dict.fromkeys(p.keywords + more["keywords"]))
+        # 1) enrichment: every field the persona gives us, before any LinkedIn lookup
+        direct, extras = persona_links(p, self.fetcher, self.searcher)
+        notes = persona_mod.enrich(p, extras)
+        p.rare_terms = _distinctive(p)
+        log(f"=== {p.display_name!r} ({p.kind}) companies={p.companies[:4]} titles={p.titles[:2]}"
+            + (f" | enriched: {notes[:6]}" if notes else ""))
+        pool: dict[str, Candidate] = {}
         for d in direct:
             self._add(pool, d["url"], d["source"], page_profiles=d["page_profiles"])
 
@@ -165,7 +169,7 @@ class Resolver:
                 if ranked[0].prob >= config.STRONG_SNIPPET_SCORE and ranked[0].levels.get("name") == "full":
                     break
 
-        # 3) slug guesses when search found nobody with the right name
+        # slug guesses when search found nobody with the right name
         if p.name_complete:
             ranked = self._score_pool(p, pool, extras) if pool else []
             if not any(c.levels.get("name") == "full" for c in ranked):
@@ -174,43 +178,81 @@ class Resolver:
                     self._add(pool, f"https://www.linkedin.com/in/{slug}", "slug")
 
         if not pool:
-            return self._result(p, [])
+            return self._result(p, [], extras=extras, notes=notes)
 
-        # 4) fetch the top-K guest profiles (persona-linked ones always)
+        # 3) evidence for the leading candidates, best first, until one is decisively ahead
         ranked = self._score_pool(p, pool, extras)
         ranked = [c for c in ranked if c.levels.get("name") != "mismatch"] or ranked
         to_fetch = [c for c in ranked if c.levels.get("source") == "persona_link"]
         to_fetch += [c for c in ranked if c not in to_fetch][:max(0, config.TOP_K_FETCH - len(to_fetch))]
         persona_face = self.face.embedding(_drive(p.image_url)) if (self.face and p.image_url) else None
-        # every LinkedIn request is precious: fetch one at a time, best first, and stop as
-        # soon as a fetched profile is decisively ahead of everything else in the pool
+        wants_company = bool(p.size or p.industry or p.domains or extras.get("li_companies"))
         for c in to_fetch:
-            if self._decided(pool):
-                break
+            if c.url not in pool or self._decided(pool):
+                continue
+            self._gather(c, pool, persona_face)
+            if wants_company and c.url in pool:
+                self._company_facts(c)
+            self._score_pool(p, pool, extras)
+
+        # 4) face sweep: a small pool of namesakes is exactly where faces decide
+        if persona_face:
+            plausible = [c for c in self._score_pool(p, pool, extras)
+                         if c.levels.get("name") not in (None, "mismatch")][:config.FACE_SWEEP_MAX]
+            for c in plausible:
+                if self._decided(pool):
+                    break
+                if c.face_sim is None and c.url in pool:
+                    self._gather(c, pool, persona_face)
+                    self._score_pool(p, pool, extras)
+
+        ranked = self._score_pool(p, pool, extras)
+        return self._result(p, ranked, persona_face is not None, extras=extras, notes=notes)
+
+    # ------------------------------------------------------------ evidence
+    def _gather(self, c: Candidate, pool: dict, persona_face) -> None:
+        """Profile page first; if walled (or photo-less), the author block of the candidate's posts."""
+        if not (c.profile and c.profile.ok):
             log(f"  [fetch] {c.url}  (snippet p={c.prob:.2f})")
             c.profile = self.li.profile(c.url)
             if c.profile.error == "404":
                 pool.pop(c.url, None)
-                continue
-            if persona_face and c.profile.ok and c.profile.image_url:
-                c.face_sim = self.face.similarity(persona_face, self.face.embedding(c.profile.image_url))
-            self._score_pool(p, pool, extras)
-
-        # profile page walled? posts are still served to guests and carry the author's
-        # name, photo and writing -> enough for name, face and keyword evidence
-        for c in to_fetch:
-            if c.url not in pool or (c.profile and c.profile.ok) or self._decided(pool):
-                continue
+                return
+        if not c.profile.ok or (persona_face and not c.profile.image_url):
             prof = self.li.author_from_posts(c.url, c.post_urls or self._find_posts(c.url))
             if prof:
                 log(f"  [posts] {c.url} <- author {prof.name!r}, photo={'yes' if prof.image_url else 'no'}")
-                c.profile = prof
-                if persona_face and prof.image_url:
-                    c.face_sim = self.face.similarity(persona_face, self.face.embedding(prof.image_url))
-                self._score_pool(p, pool, extras)
+                if c.profile.ok:                 # keep the richer profile, borrow the photo/posts
+                    c.profile.image_url = c.profile.image_url or prof.image_url
+                    c.profile.posts += [t for t in prof.posts if t not in c.profile.posts]
+                else:
+                    c.profile = prof
+        if persona_face and c.profile.ok and c.profile.image_url and c.face_sim is None:
+            c.face_sim = self.face.similarity(persona_face, self.face.embedding(c.profile.image_url))
 
-        ranked = self._score_pool(p, pool, extras)
-        return self._result(p, ranked, persona_face is not None)
+    def _company_facts(self, c: Candidate) -> None:
+        """Industry / size / website of the candidate's current company (guest company page)."""
+        if c.company_info is not None:
+            return
+        urls = list(c.profile.company_urls[:1]) if (c.profile and c.profile.ok) else []
+        if not urls:
+            v = c.view()
+            name = next((x for x in v["companies"] if x and len(x) > 2), "")
+            u = self._find_company(name) if name else None
+            urls = [u] if u else []
+        c.company_info = [i for i in (self.li.company(u) for u in urls) if i]
+        for i in c.company_info:
+            log(f"  [company] {i.get('name')!r}: {i.get('industry')} | {i.get('size')} | {i.get('website')}")
+
+    def _find_company(self, name: str) -> str | None:
+        from rapidfuzz import fuzz
+        q = re.sub(r"\(.*?\)", "", name).strip()
+        for r in self.searcher.search(f'"{q}" site:linkedin.com/company', max_results=6):
+            u = search.canonical_company(r["href"])
+            title = re.split(r"\s+[-|–]\s+", r.get("title", ""))[0]
+            if u and fuzz.token_set_ratio(tu.norm_company(q), tu.norm_company(title)) >= 85:
+                return u
+        return None
 
     def _find_posts(self, profile_url: str) -> list[str]:
         slug = search.slug_of(profile_url)
@@ -220,7 +262,8 @@ class Resolver:
                 out.append(r["href"])
         return out
 
-    def _result(self, p, ranked: list[Candidate], persona_face: bool = False) -> dict:
+    def _result(self, p, ranked: list[Candidate], persona_face: bool = False,
+                extras: dict | None = None, notes: list | None = None) -> dict:
         best = ranked[0] if ranked else None
         status = "not_found"
         if best:
@@ -242,6 +285,7 @@ class Resolver:
             "alternatives": [{"url": c.url, "confidence": round(c.prob, 3),
                               "name": c.view()["name"]} for c in ranked[1:4]],
             "persona_face_detected": persona_face,
+            "persona_enrichment": notes or [],
             # per-candidate feature levels: input for calibrate.py
             "candidates": [{"url": c.url, "score": round(c.score, 3), "levels": c.levels,
                             "same_name": c.evidence.get("_same_name_candidates", 0)}

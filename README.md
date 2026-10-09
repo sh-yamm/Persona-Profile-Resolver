@@ -44,6 +44,28 @@ Options:
 
 An optional `MISTRAL_API_KEY` in `.env` (the free tier is enough) lets an LLM help parse messy intros; the rule-based parser always runs.
 
+## Every persona field is used, for every persona
+
+| field | search | matching |
+|---|---|---|
+| name | quoted full name, first + initial | Jaro-Winkler, nicknames, initials, namesake count |
+| image | — | **face sweep** over every plausible candidate (YuNet + SFace) |
+| intro | companies, titles, domains, city, rare words | company, title, domain, keywords; **linked websites are read** (homepage + about/team pages, parent domain if dead) for company name, LinkedIn company page and sentences about the person |
+| timezone | country in queries | location agreement |
+| company_industry | Type-2 queries | vs the candidate's **company page industry** (falls back to text) |
+| company_size | — | vs the candidate's **company page size bucket** |
+| social_profile | handle searches | X bio (via search snippet), Bluesky API, GitHub API mined into the persona; handle ≈ name |
+
+Pipeline stages, identical for every persona:
+1. **Enrich:** read the persona's own sites and bios and fold the facts back into the persona.
+2. **Candidates:** persona-published links, the search ladder, post authors, slug guesses.
+3. **Evidence** for the leading candidates:
+   - the guest profile page, read in an anonymous real Chrome
+   - if that is walled, the **post pages**, whose JSON-LD carries the author's name, photo and text
+   - the **company page** of the current employer, which gives industry, size and website
+4. **Face sweep:** up to 6 plausible same-name candidates each get a photo comparison.
+5. **Score:** Fellegi–Sunter weights, then calibration, a confidence interval and the decision.
+
 ## How it works
 
 ```

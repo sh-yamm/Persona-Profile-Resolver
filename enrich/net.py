@@ -137,6 +137,9 @@ class Fetcher:
             self.limiter.done(bucket)
             resp = Response(r.status_code, str(r.url), r.content, dict(r.headers))
 
+            if linkedin and resp.status == 200 and "/signup/cold-join" in resp.url:
+                # this particular page (e.g. a non-public post) needs login; not a rate block
+                return resp
             if linkedin and self._is_blocked(resp):
                 cool = self.limiter.strike(bucket)
                 self._new_session()

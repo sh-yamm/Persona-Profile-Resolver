@@ -33,6 +33,7 @@ class Persona:
     urls: list[str] = field(default_factory=list)
     keywords: list[str] = field(default_factory=list)
     rare_terms: list[str] = field(default_factory=list)  # distinctive intro words, set by pipeline
+    li_companies: list[str] = field(default_factory=list)  # linkedin.com/company pages the persona's site links
     country: str | None = None          # strong: stated in intro
     tz_country: str | None = None       # prior from timezone
     tz_region: str | None = None
@@ -182,6 +183,75 @@ def parse_intro(intro: str) -> dict:
     res["titles"] = list(dict.fromkeys(titles))
     res["keywords"] = list(dict.fromkeys(tu.tokens(URL_RE.sub(" ", intro))))[:25]
     return res
+
+
+def clean_social_bio(text: str, own_handles: list[str]) -> str:
+    """Search-snippet bios carry page boilerplate ('Eric Doty (@DotyContent) / X', 'on X:',
+    'Posts / X'). Strip it, drop the persona's own handle, and turn company-style handles
+    ('@dock_us', '@butter_hq') into plain names so they parse as companies."""
+    if not text:
+        return ""
+    # search engines that couldn't crawl the page show a placeholder instead of the bio
+    text = re.sub(r"(?i)(?:x\.com\s*)?We would like to show you a description here but the site won.t allow us\.?",
+                  " ", text)
+    t = re.sub(r"[^()]{0,60}\(@\w+\)\s*/\s*(?:X|Twitter)\b", " ", text)
+    t = re.sub(r"(?i)\b(?:on (?:X|Twitter)|Posts? / X|X \(formerly Twitter\)|/ X\b|\| X\b)", " ", t)
+    t = re.sub(r"[️‍]", "", t)
+    for h in own_handles:
+        if h:
+            t = re.sub(rf"@?{re.escape(h)}\b", " ", t, flags=re.I)
+
+    def handle_to_name(m):
+        h = re.sub(r"_(?:us|hq|inc|app|io|co|team|official)$", "", m.group(1), flags=re.I)
+        return " @ " + h.replace("_", " ").title() + ", "
+    t = re.sub(r"@(\w{3,30})", handle_to_name, t)
+    return " ".join(t.split())
+
+
+def enrich(p: Persona, extras: dict) -> list[str]:
+    """Fold everything learned from the persona's own websites and social bios back into
+    the persona, so search queries and features use it like any intro field.
+    Returns a list of human-readable notes for the log/output."""
+    notes = []
+    known = {tu.norm_company(c) for c in p.companies + p.weak_companies}
+
+    def add_company(c, strong):
+        k = tu.norm_company(c)
+        if c and k and len(k) > 1 and k not in known and not _is_title(c):
+            known.add(k)
+            (p.companies if strong else p.weak_companies).append(c)
+            notes.append(f"{'company' if strong else 'weak company'}: {c}")
+
+    p.li_companies = list(dict.fromkeys(extras.get("li_companies", [])))
+    # the site's own name is the organisation the persona linked to -> a stated company
+    for name in extras.get("site_names", []):
+        add_company(name, strong=True)
+    # text about the person (site sentences, social bios) -> titles / companies / location / keywords
+    own = [p.twitter, p.bluesky.split(".")[0] if p.bluesky else None, p.github]
+    bios = [clean_social_bio(extras.get(k, ""), own) for k in ("twitter_bio", "bsky_bio", "github_bio")]
+    for src in extras.get("mentions", []) + bios:
+        if not src:
+            continue
+        info = parse_intro(src)
+        for c in info["companies"]:
+            add_company(c, strong=False)
+        for t in info["titles"]:
+            # "Jane Doe is Head of Community" -> "Head of Community"
+            for nm in (p.full_name, p.first, p.last):
+                if nm and len(nm) > 1:
+                    t = re.sub(rf"(?i)\b{re.escape(nm)}\b", " ", t)
+            t = re.sub(r"(?i)^\W*(?:is|was|as|our|the|a|an|now)\b\s*(?:(?:a|an|the)\b\s*)?", "", t.strip()).strip(" ,.-")
+            if t and t not in p.titles and len(t) < 60 and len(t.split()) <= 5:
+                p.titles.append(t)
+                notes.append(f"title: {t}")
+        if info["country"] and not p.country:
+            p.country = info["country"]
+            notes.append(f"country: {info['country']}")
+        p.keywords = list(dict.fromkeys(p.keywords + info["keywords"]))[:60]
+        for d in info["domains"]:
+            if d not in p.domains:
+                p.domains.append(d)
+    return notes
 
 
 def build(raw: dict, llm=None) -> Persona:

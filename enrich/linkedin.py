@@ -205,6 +205,43 @@ def parse_post_html(src: str, url: str) -> dict | None:
     return None
 
 
+def parse_company_html(src: str, url: str) -> dict | None:
+    """Guest company page -> industry, size bucket, website, HQ, description."""
+    try:
+        tree = lh.fromstring(src)
+    except Exception:
+        return None
+    out = {"url": url, "name": "", "industry": "", "size": "", "website": "", "hq": "",
+           "description": "", "employees_on_li": None}
+    for block in tree.xpath("//script[@type='application/ld+json']/text()"):
+        try:
+            d = json.loads(block)
+        except Exception:
+            continue
+        for n in d.get("@graph", [d]) if isinstance(d, dict) else d:
+            if n.get("@type") == "Organization":
+                out["name"] = _clean(n.get("name"))
+                out["description"] = _clean(n.get("description"))[:1500]
+                out["website"] = n.get("sameAs") or ""
+                emp = n.get("numberOfEmployees") or {}
+                out["employees_on_li"] = emp.get("value") if isinstance(emp, dict) else None
+    labels = {"industry": "industry", "size": "size", "website": "website", "headquarters": "hq"}
+    for el in tree.xpath("//*[starts-with(@data-test-id, 'about-us__')]"):
+        key = labels.get(el.get("data-test-id").split("__", 1)[1].lower())
+        if not key:
+            continue
+        dd = el.xpath(".//dd")
+        val = _clean(dd[0].text_content()) if dd else ""
+        if key == "website":
+            val = (el.xpath(".//a/@href") or [val])[0]
+            val = _unredirect(val)
+        if val:
+            out[key] = out[key] or val
+    if not out["name"]:
+        out["name"] = _clean((tree.xpath("//h1") or [None])[0].text_content()) if tree.xpath("//h1") else ""
+    return out if (out["name"] or out["industry"] or out["size"]) else None
+
+
 class LinkedInClient:
     def __init__(self, fetcher, cache):
         self.fetcher = fetcher
@@ -294,6 +331,22 @@ class LinkedInClient:
             if not prof.image_url and data.get("author_image"):
                 prof.image_url = data["author_image"]
         return prof
+
+    def company(self, company_url: str) -> dict | None:
+        """Company facts (cached). Plain HTTP: company pages are served to guests."""
+        hit = self.cache.get_json("company", company_url)
+        if hit is not None:
+            return hit or None
+        if config.OFFLINE:
+            return None
+        try:
+            r = self.fetcher.get(company_url, bucket="linkedin:company", cache_ns=None, linkedin=True)
+        except Blocked as e:
+            log(f"  [company] blocked on {company_url}: {e}")
+            return None
+        info = parse_company_html(r.text, company_url) if r.status == 200 else None
+        self.cache.set_json("company", company_url, info or {})
+        return info
 
     def close(self):
         if self._browser is not None:

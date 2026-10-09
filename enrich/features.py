@@ -21,6 +21,7 @@ class Candidate:
     sources: set = field(default_factory=set)        # website / bluesky / search:tight / search:loose / slug
     snippets: list = field(default_factory=list)     # parsed snippet dicts
     post_urls: list = field(default_factory=list)    # linkedin.com/posts/<slug>_... by this person
+    company_info: list | None = None                 # guest company-page facts of current employer
     best_rank: int = 99
     page_profiles: int = 99                           # profiles on the linking web page
     profile: Profile | None = None
@@ -44,10 +45,14 @@ class Candidate:
         location = (p.location if p else "") or next((s["location"] for s in snips if s.get("location")), "")
         country = (p.country if p else None) or tu.country_from_text(location)
         snippet_text = " ".join(s["text"] for s in snips)
+        facts = self.company_info or []
+        websites = (p.websites if p else []) + [f["website"] for f in facts if f.get("website")]
+        company_slugs = [u.rstrip("/").split("/")[-1] for u in (p.company_urls if p else [])]
+        company_slugs += [f["url"].rstrip("/").split("/")[-1] for f in facts if f.get("url")]
         return {
             "name": name, "headlines": headlines, "companies": companies,
-            "company_slugs": [u.rstrip("/").split("/")[-1] for u in (p.company_urls if p else [])],
-            "websites": p.websites if p else [], "location": location, "country": country,
+            "company_slugs": company_slugs, "company_facts": facts,
+            "websites": websites, "location": location, "country": country,
             "education": (p.education if p else []) + [s["education"] for s in snips if s.get("education")],
             "about": p.about if p else "", "posts": p.posts if p else [],
             "snippet_text": snippet_text, "image_url": p.image_url if p else "",
@@ -156,6 +161,9 @@ def company_level(persona, v: dict) -> tuple[str | None, dict]:
     # rare intro words (>= 8 chars, e.g. 'spiffworkflow') act like a stated company
     rare = [k for k in getattr(persona, "rare_terms", []) if len(k) >= 8]
     strong, weak = persona.companies + rare, persona.weak_companies
+    li_slugs = {u.rstrip("/").split("/")[-1] for u in extras_li_companies(persona)}
+    if li_slugs and li_slugs & set(v["company_slugs"]):
+        return "strong", {"matched": sorted(li_slugs & set(v["company_slugs"]))[0], "where": "company page"}
     if not strong and not weak:
         return None, {}
     fields_ = v["companies"] + v["headlines"] + v["company_slugs"]
@@ -180,6 +188,23 @@ def company_level(persona, v: dict) -> tuple[str | None, dict]:
     if not v["companies"] and not v["headlines"]:
         return None, {}
     return ("mismatch" if strong else None), {"best_sim": best}
+
+
+def extras_li_companies(persona) -> list[str]:
+    return getattr(persona, "li_companies", []) or []
+
+
+def size_level(persona, v: dict) -> tuple[str | None, dict]:
+    """Persona company_size vs the candidate's current company size bucket."""
+    if not persona.size:
+        return None, {}
+    for f in v["company_facts"]:
+        rng = tu.parse_size(f.get("size"))
+        if rng:
+            lo, hi = persona.size
+            ok = not (rng[1] < lo or rng[0] > hi)
+            return ("match" if ok else "mismatch"), {"persona": persona.size, "company": f.get("size")}
+    return None, {}
 
 
 def domain_level(persona, v: dict) -> tuple[str | None, dict]:
@@ -292,6 +317,14 @@ def industry_level(persona, v: dict) -> tuple[str | None, dict]:
         return None, {}
     key = tu.norm(persona.industry)
     words = INDUSTRY_SYNONYMS.get(key) or [w for w in key.split() if w not in {"software", "services"}] or key.split()
+    for f in v["company_facts"]:
+        ind = tu.norm(f.get("industry"))
+        if ind:
+            desc = tu.norm(f.get("description"))
+            hit = (fuzz.token_set_ratio(key, ind) >= 80
+                   or any(f" {tu.norm(w)} " in f" {ind} " for w in words)
+                   or sum(f" {tu.norm(w)} " in f" {desc} " for w in words) >= 2)
+            return ("company_match" if hit else "company_mismatch"), {"company_industry": f.get("industry")}
     blob = " " + tu.norm(" ".join(v["headlines"] + v["companies"]) + " " + v["about"] + " " + v["snippet_text"]) + " "
     hits = [w for w in words if f" {tu.norm(w)} " in blob]
     if not blob.strip():
@@ -332,6 +365,7 @@ def extract(persona, c: Candidate, extras: dict) -> None:
         "social": social_level(persona, v, extras, c.url),
         "keywords": keyword_level(persona, v),
         "industry": industry_level(persona, v),
+        "size": size_level(persona, v),
     }
     c.levels = {k: lv for k, (lv, _) in comps.items()}
     c.evidence = {k: ev for k, (_, ev) in comps.items() if ev}

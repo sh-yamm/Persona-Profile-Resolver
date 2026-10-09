@@ -31,7 +31,8 @@ WEIGHTS = {
     "face": {"strong": 6.0, "likely": 3.0, "unclear": 0.0, "mismatch": -2.5},
     "social": {"match": 6.0, "handle_name": 3.5},
     "keywords": {"high": 1.5, "some": 0.6, "none": -0.3},
-    "industry": {"match": 1.2, "none": -0.4},
+    "industry": {"company_match": 1.6, "match": 1.2, "none": -0.4, "company_mismatch": -0.8},
+    "size": {"match": 1.2, "mismatch": -1.5},
     "source": {"persona_link": 3.0, "team_page": 1.0, "tight_top": 0.6, "search": 0.0,
                "slug_guess": -0.5},
 }

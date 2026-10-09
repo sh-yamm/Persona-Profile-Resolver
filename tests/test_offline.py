@@ -146,3 +146,25 @@ def test_post_author_parsing_and_matching():
     # emoji / punctuation in the display name must not break the name match
     p = persona.build({"name": "Jane Doe"})
     assert features.name_level(p, d["author_name"])[0] == "full"
+
+
+def test_company_facts_size_and_industry():
+    p = persona.build({"name": "Peter", "intro": "Managing Consultant in UK",
+                       "company_industry": "Human Resources Software", "company_size": "11–50 Employees"})
+    c = Candidate(url="https://www.linkedin.com/in/peter-x",
+                  snippets=[parse_snippet("Peter X - Managing Consultant - Acme HR | LinkedIn", "")])
+    c.company_info = [{"url": "https://www.linkedin.com/company/acme-hr", "industry": "Human Resources Services",
+                       "size": "11-50 employees", "website": "https://acmehr.co.uk", "description": "HR software"}]
+    features.extract(p, c, {})
+    assert c.levels["size"] == "match" and c.levels["industry"] == "company_match"
+    c.company_info[0]["size"] = "1,001-5,000 employees"
+    features.extract(p, c, {})
+    assert c.levels["size"] == "mismatch"
+
+
+def test_enrichment_folds_site_and_bio_into_persona():
+    p = persona.build({"name": "Jane Doe", "intro": "Story nerd (https://example.community)"})
+    notes = persona.enrich(p, {"site_names": ["StoryChamp"], "mentions": ["Jane Doe is Head of Community at StoryChamp, based in Austin, TX"],
+                               "twitter_bio": "", "bsky_bio": "", "li_companies": ["https://www.linkedin.com/company/storychamp"]})
+    assert "StoryChamp" in p.companies and any("Head of Community" in t for t in p.titles)
+    assert p.li_companies and notes
