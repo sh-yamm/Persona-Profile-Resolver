@@ -53,9 +53,11 @@ persona ─► normalise ─► candidates ─► snippet pre-rank ─► fetch 
 1. **Normalise:** clean up names, parse the intro, and turn the timezone into a country prior.
    - Names: `"Eric Doty (Superpath)"` → name + company hint; `"DamionW"` → `Damion W.`; `"Uriel S."` → first name + initial.
    - Intro: `@ Company`, `at Company`, `Founder of X`, `X (https://…)` patterns, plus domains, titles and "in UK"/"City, ST" locations. "Tools:" / "Looking for:" asides are ignored.
-2. **Candidates,** in order of precision:
+2. **Candidates** (all of them are used together):
    - **Links the persona publishes:** LinkedIn links on their own website, or in a Bluesky bio via its open public API.
    - **A search ladder:** start with `"Full Name" "Company" site:linkedin.com/in` and loosen step by step. It uses free search backends through `ddgs` (Bing, Yahoo, DDG, Brave, Mojeek), rotating between them, and stops early once a strong match appears.
+   - **Rare intro words:** distinctive words from the intro (e.g. `"Kevin Burnett" spiffworkflow`) are searched, and the city when one is stated.
+   - **Post URLs:** a result like `linkedin.com/posts/damionwaltermeyer_…` reveals its author's profile slug, and the post text becomes evidence.
    - **Slug guesses** (`linkedin.com/in/firstlast`) only when nothing else is found.
 3. **Snippet pre-rank:** search snippets already carry the headline, company and location. Candidates are ranked on those first, so only about 3 profiles per persona are ever fetched.
 4. **Guest profile parse:** the stable, SEO-facing data (JSON-LD `Person`, `og:` tags). This gives name, location and country, current company, the company website link, school, recent posts and the photo. Fields that LinkedIn masks for guests are ignored.
@@ -69,7 +71,8 @@ persona ─► normalise ─► candidates ─► snippet pre-rank ─► fetch 
 | title | fuzzy title match + seniority level |
 | location | profile country vs stated country, or vs the timezone country/region |
 | face | OpenCV **YuNet** detector + **SFace** embedding (open-source ONNX, CPU); cosine ≥ 0.363 means same identity |
-| social | Twitter/GitHub handle on the profile, or the profile linked from the persona's own pages |
+| social | Twitter/GitHub handle on the profile, or the profile linked from the persona's own pages; a handle spelled from the candidate's name (`@rajavijayach` ≈ "Raja Vijaya Ch") |
+| rare terms | a rare intro word (≥ 8 chars) that prefix-matches the candidate's company counts as a stated company ("spiffworkflow" ≈ "SpiffWorks") |
 | keywords | overlap between intro interests and headline/about/posts |
 | industry | Type-2 personas: industry synonyms in headline/company/snippets |
 | source | persona-published link ≫ top result of a tight query ≫ loose search ≫ slug guess |
@@ -118,7 +121,17 @@ This prints the top-1 accuracy and writes `models/calibration.json`, which every
 | no wall bypass | only what LinkedIn shows logged-out visitors is read; walled profiles are scored from their search snippet |
 | browser fallback | Patchright (CDP leaks patched) on real Chrome, headful, `AutomationControlled` disabled, plus a dismissible sign-in modal close and a small scroll |
 
-Expect about 1–2 minutes per persona at default delays.
+**What LinkedIn tolerates, in practice:** an anonymous guest gets only a handful of profile pages per IP before HTTP 999, after which roughly one request per 5–10 minutes gets through. The pipeline is built around that:
+
+- **Snippet-first scoring:** search snippets already carry the name, headline, company and location, so most personas resolve without any LinkedIn request.
+- **Non-blocking cool-downs:** a blocked fetch never stalls the run. The persona is scored on its snippets, and **retry rounds** at the end wait out each cool-down and fetch the most promising profiles first.
+- **Decisive early stop:** once one fetched profile is decisively ahead, no further profiles are fetched for that persona.
+- **Junk-URL filter:** slugs scraped from page markup (e.g. `carrie-chan-)43:t751`) are rejected, because fetching them triggered the first 999.
+- **Session reset:** after a 999 the guest cookies are discarded along with the cool-down.
+
+The first pass takes about 1 minute per persona. Retry rounds can take hours if the IP is throttled, and you can interrupt them safely. `python run.py … --offline` re-scores everything from the cache with no network at all, which is useful after changing weights or labels.
+
+**Splice-safe snippets:** Bing occasionally glues neighbouring results into one title ("A – X …B – Y | LinkedIn"). Only the result's own part is used as evidence, and snippets whose name doesn't fit the profile slug are dropped.
 
 ## Layout
 
