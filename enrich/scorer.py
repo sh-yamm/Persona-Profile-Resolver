@@ -29,7 +29,7 @@ WEIGHTS = {
     "location": {"country_stated": 2.0, "country_tz": 1.4, "region_tz": 0.5,
                  "mismatch_stated": -2.5, "mismatch_tz": -1.5},
     "face": {"strong": 6.0, "likely": 3.0, "unclear": 0.0, "mismatch": -2.5},
-    "social": {"match": 6.0},
+    "social": {"match": 6.0, "handle_name": 3.5},
     "keywords": {"high": 1.5, "some": 0.6, "none": -0.3},
     "industry": {"match": 1.2, "none": -0.4},
     "source": {"persona_link": 3.0, "team_page": 1.0, "tight_top": 0.6, "search": 0.0,

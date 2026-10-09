@@ -32,7 +32,7 @@ class MistralParser:
 
     def parse_intro(self, intro: str) -> dict | None:
         hit = self.cache.get_json("llm", intro)
-        if hit is not None:
+        if hit is not None or config.OFFLINE:
             return hit
         self.limiter.wait("llm")
         try:

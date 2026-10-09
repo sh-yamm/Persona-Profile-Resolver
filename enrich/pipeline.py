@@ -127,6 +127,7 @@ class Resolver:
     # --------------------------------------------------------------------- main
     def resolve(self, raw: dict) -> dict:
         p = persona_mod.build(raw, self.llm)
+        p.rare_terms = _distinctive(p)
         log(f"=== {p.display_name!r} ({p.kind}) companies={p.companies} titles={p.titles[:2]}")
         pool: dict[str, Candidate] = {}
 
@@ -144,10 +145,17 @@ class Resolver:
             results = self.searcher.search(query)
             for rank, r in enumerate(results, 1):
                 url = search.canonical_profile(r["href"])
-                if not url:
+                if url:
+                    snip = search.parse_snippet(r["title"], r["body"])
+                    self._add(pool, url, f"search:{tier}", snip, rank)
                     continue
-                snip = search.parse_snippet(r["title"], r["body"])
-                self._add(pool, url, f"search:{tier}", snip, rank)
+                # a post by the person reveals their profile slug; its text is evidence too
+                url = search.profile_from_post(r["href"])
+                if url:
+                    snip = {"name": _name_for_fused_slug(p, url), "headline": "", "company": "",
+                            "location": "", "education": "",
+                            "text": f"{r['title']} {r['body']}"}
+                    self._add(pool, url, f"search:{tier}", snip, rank + 2)
             if pool:
                 ranked = self._score_pool(p, pool, extras)
                 if ranked[0].prob >= config.STRONG_SNIPPET_SCORE and ranked[0].levels.get("name") == "full":
@@ -219,6 +227,17 @@ class Resolver:
         }
         log(f"  => {out['status']} {out['linkedin_url']} p={out['confidence']} CI={out['confidence_interval']}")
         return out
+
+
+def _name_for_fused_slug(p, url: str) -> str:
+    """'damionwaltermeyer' + persona first 'Damion' -> 'damion waltermeyer'."""
+    slug = re.sub(r"[-_]?\d.*$", "", search.slug_of(url).lower())
+    if "-" in slug:
+        return slug.replace("-", " ")
+    first = tu.norm(p.first).replace(" ", "")
+    if first and slug.startswith(first) and len(slug) > len(first) + 1:
+        return f"{first} {slug[len(first):]}"
+    return ""
 
 
 def _snippet_fits_url(snippet: dict, url: str) -> bool:

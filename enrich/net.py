@@ -112,6 +112,8 @@ class Fetcher:
             hit = self.cache.get_json(cache_ns, url)
             if hit is not None:
                 return Response(hit["status"], hit["url"], hit["content"].encode("latin-1"), hit["headers"])
+        if config.OFFLINE:
+            raise Blocked("offline mode: not in cache")
 
         # LinkedIn: never sleep through a cool-down mid-run and never retry a 999 in the
         # same call; the caller degrades to snippet-only evidence and retries in a later pass.

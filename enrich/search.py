@@ -25,6 +25,15 @@ def canonical_profile(url: str) -> str | None:
     return f"https://www.linkedin.com/in/{up.quote(slug, safe='-_.~')}"
 
 
+LI_POST_RE = re.compile(r"https?://(?:[a-z]{2,3}\.)?linkedin\.com/posts/([\w%-]+?)_", re.I)
+
+
+def profile_from_post(url: str) -> str | None:
+    """/posts/damionwaltermeyer_hey-everyone-... -> /in/damionwaltermeyer (the author)."""
+    m = LI_POST_RE.search(url or "")
+    return canonical_profile(f"https://www.linkedin.com/in/{m.group(1)}") if m else None
+
+
 def canonical_company(url: str) -> str | None:
     m = LI_COMPANY_RE.search(url or "")
     return f"https://www.linkedin.com/company/{m.group(1).lower()}" if m else None
@@ -50,6 +59,8 @@ class Searcher:
         hit = self.cache.get_json("search", query)
         if hit is not None:
             return hit
+        if config.OFFLINE:
+            return []
         results: list[dict] = []
         for backend in self._backends():
             if self._dead.get(backend, 0) >= 6:
@@ -86,13 +97,18 @@ def parse_snippet(title: str, body: str) -> dict:
     t = re.sub(r"\s*[|\-–]\s*LinkedIn.*$", "", title or "", flags=re.I).strip()
     t = t.split("...")[0].split("…")[0].strip()     # bing sometimes splices the next result after "..."
     parts = [p.strip() for p in re.split(r"\s+[-–—|]\s+", t) if p.strip()]
+    # bing splices neighbouring results into one title/body ("A - X ...B - Y | LinkedIn ...");
+    # keep only this result's own part as evidence
+    b = body or ""
+    m = re.search(r"profile on LinkedIn[^.]*?\.\.\.", b)
+    if m:
+        b = b[:m.end()]
     out = {"name": parts[0] if parts else "", "headline": "", "company": "",
-           "location": "", "education": "", "text": f"{title} {body}"}
+           "location": "", "education": "", "text": f"{t} {b}"}
     if len(parts) >= 3:
         out["headline"], out["company"] = parts[1], parts[-1]
     elif len(parts) == 2:
         out["headline"] = parts[1]
-    b = body or ""
     for key, label in (("company", "Experience"), ("education", "Education"), ("location", "Location")):
         m = re.search(rf"{label}:\s*([^·•|]+?)(?:\s*[·•|]|\s+\d+\+? connections|$)", b)
         if m:

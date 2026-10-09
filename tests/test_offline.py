@@ -112,6 +112,16 @@ def test_namesake_penalty():
     assert common < unique
 
 
+def test_rare_intro_word_matches_company():
+    from enrich.pipeline import _distinctive
+    p = persona.build({"name": "Jane Doe", "intro": "software developer, acmeflowcraft, python"})
+    p.rare_terms = _distinctive(p)
+    c = Candidate(url="https://www.linkedin.com/in/jdoe",
+                  snippets=[parse_snippet("Jane Doe - AcmeFlow | LinkedIn", "Experience: AcmeFlow")])
+    features.extract(p, c, {})
+    assert c.levels["company"] == "strong"
+
+
 def test_missing_data_is_not_mismatch():
     p = persona.build({"name": "Jane Doe"})
     c = _cand()

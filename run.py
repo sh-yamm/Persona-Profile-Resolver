@@ -29,6 +29,8 @@ def main():
                     help="don't wait out a LinkedIn cool-down to re-fetch profiles that were blocked")
     ap.add_argument("--retry-rounds", type=int, default=3,
                     help="max passes over personas whose profiles could not be fetched (default 3)")
+    ap.add_argument("--offline", action="store_true",
+                    help="no network at all: re-score purely from the cache")
     ap.add_argument("--browser-fallback", action="store_true",
                     help="retry blocked profile fetches in an anonymous Patchright browser")
     args = ap.parse_args()
@@ -37,6 +39,9 @@ def main():
         os.environ["PPR_DELAY_SCALE"] = str(args.delay_scale)
     if args.browser_fallback:
         os.environ["PPR_BROWSER_FALLBACK"] = "1"
+    if args.offline:
+        os.environ["PPR_OFFLINE"] = "1"
+        args.no_retry_pass = True
 
     from enrich import config
     from enrich.cache import Cache

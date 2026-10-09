@@ -46,7 +46,9 @@ def fit(rows):
     y = np.array([t for _, t in rows])
     if len(set(y)) < 2:
         raise SystemExit("need both positive and negative candidates to calibrate")
-    m = LogisticRegression(C=10.0).fit(X, y)
+    # strong L2: with a handful of labelled personas the classes are often separable,
+    # and an unregularised fit would become absurdly overconfident
+    m = LogisticRegression(C=0.3).fit(X, y)
     return float(m.coef_[0][0]), float(m.intercept_[0])
 
 

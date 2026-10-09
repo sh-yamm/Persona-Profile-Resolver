@@ -117,12 +117,24 @@ def name_level(persona, cand_name: str) -> tuple[str | None, dict]:
 # company / domain / title / location / social / keywords / industry
 # --------------------------------------------------------------------------- #
 
+def _prefix_match(a: str, b: str) -> bool:
+    """'spiffworkflow' ~ 'spiffworks': long shared prefix of two long tokens."""
+    n = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        n += 1
+    return n >= 6 and n >= 0.7 * min(len(a), len(b))
+
+
 def _company_sim(a: str, b: str) -> float:
     a, b = tu.norm_company(a), tu.norm_company(b)
     if not a or not b:
         return 0.0
     if a == b:
         return 100.0
+    if any(_prefix_match(x, y) for x in a.split() for y in b.split()):
+        return 90.0
     if len(a) < 3 or len(b) < 3:
         return 0.0
     short, long_ = sorted((a, b), key=len)
@@ -140,7 +152,9 @@ def _text_contains_company(company: str, text: str) -> bool:
 
 
 def company_level(persona, v: dict) -> tuple[str | None, dict]:
-    strong, weak = persona.companies, persona.weak_companies
+    # rare intro words (>= 8 chars, e.g. 'spiffworkflow') act like a stated company
+    rare = [k for k in getattr(persona, "rare_terms", []) if len(k) >= 8]
+    strong, weak = persona.companies + rare, persona.weak_companies
     if not strong and not weak:
         return None, {}
     fields_ = v["companies"] + v["headlines"] + v["company_slugs"]
@@ -225,6 +239,13 @@ def social_level(persona, v: dict, extras: dict, url: str) -> tuple[str | None, 
     for h in handles:
         if len(h) >= 4 and re.search(rf"(twitter\.com|x\.com|github\.com)/{re.escape(h)}\b|@{re.escape(h)}\b", blob):
             return "match", {"handle": h}
+    # handle spelled from the candidate's own name tokens: @rajavijayach ~ 'Raja Vijaya Ch'
+    name_glued = tu.norm(v["name"]).replace(" ", "")
+    all_handles = handles + ([persona.bluesky.split(".")[0].lower()] if persona.bluesky else [])
+    for h in all_handles:
+        if len(h) >= 6 and name_glued and (h == name_glued or (len(name_glued) >= 6 and h.startswith(name_glued)
+                                                                and len(h) - len(name_glued) <= 2)):
+            return "handle_name", {"handle": h, "name": v["name"]}
     slug = url.rstrip("/").split("/")[-1].lower()
     for t in [extras.get("bsky_bio", "")] + list(extras.get("site_text", {}).values()):
         if slug and f"linkedin.com/in/{slug}" in t.lower():
@@ -241,6 +262,7 @@ def keyword_level(persona, v: dict) -> tuple[str | None, dict]:
     if not ct:
         return None, {}
     overlap = pk & ct
+    overlap |= {k for k in pk - overlap if len(k) >= 6 and any(_prefix_match(k, t) for t in ct)}
     frac = len(overlap) / len(pk)
     lvl = "high" if frac >= 0.3 else "some" if frac >= 0.12 else "none"
     return lvl, {"overlap": sorted(overlap)[:10], "frac": round(frac, 2)}

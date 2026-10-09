@@ -32,6 +32,7 @@ class Persona:
     domains: list[str] = field(default_factory=list)
     urls: list[str] = field(default_factory=list)
     keywords: list[str] = field(default_factory=list)
+    rare_terms: list[str] = field(default_factory=list)  # distinctive intro words, set by pipeline
     country: str | None = None          # strong: stated in intro
     tz_country: str | None = None       # prior from timezone
     tz_region: str | None = None

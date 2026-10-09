@@ -62,5 +62,8 @@ BROWSER_FALLBACK = os.environ.get("PPR_BROWSER_FALLBACK", "0") == "1"
 TAU_ACCEPT = 0.50
 TAU_AMBIGUOUS_MARGIN = 0.10
 
+# --offline: answer only from the cache (re-score / calibrate without any network)
+OFFLINE = os.environ.get("PPR_OFFLINE", "0") == "1"
+
 MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY", "")
 MISTRAL_MODEL = os.environ.get("MISTRAL_MODEL", "mistral-small-latest")
