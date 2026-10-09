@@ -30,23 +30,29 @@ REQUEST_TIMEOUT = 25
 
 # --------------------------------------------------------------------------- #
 # Rate limiting: (min, max) seconds between two requests to the same bucket.
-# Multiplied by DELAY_SCALE (CLI --delay-scale). Keep LinkedIn slow.
+# Multiplied by DELAY_SCALE (CLI --delay-scale).
+#
+# Neither LinkedIn nor Bing publish limits. LinkedIn's HTTP 999 is driven mainly by
+# client fingerprint + IP reputation, not a fixed per-minute rate: in our runs a plain
+# HTTP client got 999 even after 6 idle hours while a real (anonymous) Chrome loaded the
+# same page first try. So gaps are human-browsing-sized, and the real protection is
+# (a) a genuine browser for LinkedIn and (b) backing off only when a block actually happens.
 # --------------------------------------------------------------------------- #
 DELAY_SCALE = float(os.environ.get("PPR_DELAY_SCALE", "1.0"))
 BUCKET_DELAYS = {
-    "linkedin": (20.0, 45.0),
-    "search": (6.0, 15.0),      # per search backend (bing, yahoo, ...)
-    "web": (3.0, 7.0),          # persona websites, bluesky, google drive
-    "llm": (1.5, 3.0),          # mistral free tier is ~1 req/s
+    "linkedin": (4.0, 9.0),     # a person clicking through profiles
+    "search": (2.0, 5.0),       # per search backend (bing, yahoo, ...) - rotation spreads load
+    "web": (1.0, 3.0),          # persona websites, bluesky, google drive, licdn image CDN
+    "llm": (1.2, 2.0),          # mistral free tier is ~1 req/s
 }
-# a longer "coffee break" after every N hits to the same bucket
+# a short pause after every N hits to the same bucket, so traffic isn't perfectly regular
 BUCKET_BREAKS = {
-    "linkedin": (15, (120.0, 300.0)),
-    "search": (25, (60.0, 150.0)),
+    "linkedin": (25, (30.0, 90.0)),
+    "search": (40, (20.0, 60.0)),
 }
-# on HTTP 999 / 429 / authwall: cool down, doubling each time
-BACKOFF_BASE = 5 * 60
-BACKOFF_MAX = 60 * 60
+# on HTTP 999 / 429 / authwall: cool down, doubling each time, reset after a success
+BACKOFF_BASE = 2 * 60
+BACKOFF_MAX = 30 * 60
 
 # --------------------------------------------------------------------------- #
 # Pipeline
@@ -56,7 +62,10 @@ SEARCH_RESULTS = 10
 MAX_QUERIES_PER_PERSONA = 7
 STRONG_SNIPPET_SCORE = 0.80     # stop issuing looser queries once a candidate scores this
 TOP_K_FETCH = 3                 # full profile fetches per persona
-BROWSER_FALLBACK = os.environ.get("PPR_BROWSER_FALLBACK", "0") == "1"
+# LinkedIn profile pages: "browser" = anonymous real Chrome via Patchright (default; plain
+# HTTP clients get fingerprinted to 999 quickly), "http" = curl_cffi only.
+LINKEDIN_FETCHER = os.environ.get("PPR_LINKEDIN_FETCHER", "browser")
+BROWSER_HEADLESS = os.environ.get("PPR_HEADLESS", "0") == "1"
 
 # decision thresholds on calibrated probability
 TAU_ACCEPT = 0.50

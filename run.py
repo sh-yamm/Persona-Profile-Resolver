@@ -31,14 +31,17 @@ def main():
                     help="max passes over personas whose profiles could not be fetched (default 3)")
     ap.add_argument("--offline", action="store_true",
                     help="no network at all: re-score purely from the cache")
-    ap.add_argument("--browser-fallback", action="store_true",
-                    help="retry blocked profile fetches in an anonymous Patchright browser")
+    ap.add_argument("--http-only", action="store_true",
+                    help="fetch LinkedIn pages with plain HTTP instead of the anonymous Chrome browser")
+    ap.add_argument("--headless", action="store_true", help="run the anonymous browser headless")
     args = ap.parse_args()
 
     if args.delay_scale is not None:
         os.environ["PPR_DELAY_SCALE"] = str(args.delay_scale)
-    if args.browser_fallback:
-        os.environ["PPR_BROWSER_FALLBACK"] = "1"
+    if args.http_only:
+        os.environ["PPR_LINKEDIN_FETCHER"] = "http"
+    if args.headless:
+        os.environ["PPR_HEADLESS"] = "1"
     if args.offline:
         os.environ["PPR_OFFLINE"] = "1"
         args.no_retry_pass = True
@@ -66,7 +69,7 @@ def main():
         face = FaceMatcher(fetcher, cache)
     llm = MistralParser.maybe(cache, fetcher.limiter)
     log(f"{len(personas)} personas | delay x{config.DELAY_SCALE} | face={'on' if face else 'off'} "
-        f"| mistral={'on' if llm else 'off'} | browser-fallback={'on' if config.BROWSER_FALLBACK else 'off'}")
+        f"| mistral={'on' if llm else 'off'} | linkedin-fetcher={config.LINKEDIN_FETCHER}")
     li = LinkedInClient(fetcher, cache)
     resolver = Resolver(fetcher, cache, li, Searcher(cache, fetcher.limiter), face, llm)
 

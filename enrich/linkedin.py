@@ -177,46 +177,63 @@ class LinkedInClient:
         self.fetcher = fetcher
         self.cache = cache
         self._browser = None
+        self._browser_failed = False
+
+    def _get_browser(self):
+        if self._browser is None and not self._browser_failed and config.LINKEDIN_FETCHER == "browser":
+            from .browser import try_start
+            self._browser = try_start(config.BROWSER_HEADLESS)
+            self._browser_failed = self._browser is None
+        return self._browser
 
     def profile(self, url: str) -> Profile:
         hit = self.cache.get_json("profile", url)
         if hit is not None:
             return Profile.from_dict(hit)
-        prof = None
+        if config.OFFLINE:
+            return Profile(url=url, error="offline")
+        browser = self._get_browser()
         try:
-            r = self.fetcher.get(url, bucket="linkedin", cache_ns=None, linkedin=True)
-            if r.status == 404:
-                prof = Profile(url=url, error="404")
-            else:
-                prof = parse_profile_html(r.text, url)
-                if not prof.ok:
-                    prof.error = f"unparsed HTTP {r.status}"
+            prof = self._via_browser(browser, url) if browser else self._via_http(url)
         except Blocked as e:
             log(f"  [linkedin] blocked on {url}: {e}")
-            if config.BROWSER_FALLBACK:
-                prof = self._browser_profile(url)
-            if prof is None:
-                # not cached: a later run may succeed once the cool-down passes
-                return Profile(url=url, error=f"blocked: {e}")
+            # not cached: a later round may succeed once the cool-down passes
+            return Profile(url=url, error=f"blocked: {e}")
         if prof.ok or prof.error == "404":
             self.cache.set_json("profile", url, prof.to_dict())
         return prof
 
-    # ---------------------------------------------------------------- browser
-    def _browser_profile(self, url: str) -> Profile | None:
+    def _via_http(self, url: str) -> Profile:
+        r = self.fetcher.get(url, bucket="linkedin", cache_ns=None, linkedin=True)
+        if r.status == 404:
+            return Profile(url=url, error="404")
+        prof = parse_profile_html(r.text, url)
+        if not prof.ok:
+            prof.error = f"unparsed HTTP {r.status}"
+        return prof
+
+    def _via_browser(self, browser, url: str) -> Profile:
+        from .browser import BrowserBlocked
+        lim = self.fetcher.limiter
+        lim.wait("linkedin", sleep_through_cooldown=False)   # raises Blocked while cooling
         try:
-            from .browser import GuestBrowser
-        except Exception as e:  # patchright not installed
-            log(f"  [linkedin] browser fallback unavailable: {e}")
-            return None
-        if self._browser is None:
-            self._browser = GuestBrowser()
-        src = self._browser.get_html(url, self.fetcher.limiter)
-        if not src:
-            return None
+            status, final, src = browser.fetch(url)
+        except BrowserBlocked as e:
+            cool = lim.strike("linkedin")
+            log(f"  [net] LinkedIn block in browser ({e}) -> cool-down {cool/60:.1f} min")
+            raise Blocked(str(e))
+        except Exception as e:                                # timeout / navigation error
+            raise Blocked(f"{type(e).__name__}: {e}")
+        finally:
+            lim.done("linkedin")
+        lim.clear_strikes("linkedin")
+        if status == 404:
+            return Profile(url=url, error="404")
         prof = parse_profile_html(src, url)
         prof.source = "browser"
-        return prof if prof.ok else None
+        if not prof.ok:
+            prof.error = f"unparsed HTTP {status}"
+        return prof
 
     def close(self):
         if self._browser is not None:

@@ -40,7 +40,7 @@ Options:
 - `--limit N`
 - `--no-face`
 - `--delay-scale X`: multiplies every politeness delay
-- `--browser-fallback`: retries a blocked fetch in an anonymous Patchright browser
+- `--http-only`: fetch LinkedIn with plain HTTP instead of the anonymous browser; `--headless`: hide the browser window
 
 An optional `MISTRAL_API_KEY` in `.env` (the free tier is enough) lets an LLM help parse messy intros; the rule-based parser always runs.
 
@@ -115,11 +115,11 @@ This prints the top-1 accuracy and writes `models/calibration.json`, which every
 |---|---|
 | no login | anonymous guest only; no cookies or `session.json` from any account |
 | real fingerprint | `curl_cffi` impersonates Chrome's TLS (JA3/JA4) and HTTP/2 fingerprint, with a single consistent identity per run |
-| slow, jittered | LinkedIn 20–45 s between requests + a 2–5 min break every 15; each search engine 6–15 s, with a break every 25 |
-| backoff | HTTP 999/429 or an authwall → 15 min cool-down, doubling up to 1 h |
+| human-paced, jittered | LinkedIn 4–9 s, each search engine 2–5 s (rotation spreads load), other sites 1–3 s; short pauses every 25–40 requests. No published limits exist; 999 is driven by fingerprint + a per-IP guest view quota, not spacing |
+| backoff | HTTP 999/429 or an authwall → 2 min cool-down, doubling up to 30 min, reset on success; escalation persists across restarts |
 | fetch less | snippet pre-ranking means at most ~3 profile fetches per persona; everything is cached in SQLite |
 | no wall bypass | only what LinkedIn shows logged-out visitors is read; walled profiles are scored from their search snippet |
-| browser fallback | Patchright (CDP leaks patched) on real Chrome, headful, `AutomationControlled` disabled, plus a dismissible sign-in modal close and a small scroll |
+| real browser for LinkedIn | anonymous Patchright on real Chrome (one window reused, headful, `AutomationControlled` off), modal close + small scroll; plain HTTP got fingerprinted to 999 far sooner. `--http-only` / `--headless` to change |
 
 **What LinkedIn tolerates, in practice:** an anonymous guest gets only a handful of profile pages per IP before HTTP 999, after which roughly one request per 5–10 minutes gets through. The pipeline is built around that:
 
