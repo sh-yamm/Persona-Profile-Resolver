@@ -8,6 +8,8 @@ No LinkedIn account is used, ever. Every request is an anonymous guest request, 
   <img src="docs/img/architecture.svg" alt="System architecture" width="100%">
 </p>
 
+> **Want the code-level details?** [`docs/INTERNALS.md`](docs/INTERNALS.md) walks through every module: request lifecycle, rate-limiter state machine, browser threading, parsers, comparators, scoring math, failure handling and how to extend the system.
+
 ---
 
 ## Contents
@@ -456,6 +458,7 @@ Persona-Profile-Resolver/
 │   └── test_offline.py     13 network-free tests on synthetic data
 └── docs/
     ├── img/                architecture, data-flow, scoring and access-strategy diagrams (SVG)
+    ├── INTERNALS.md        under-the-hood reference: every module, algorithm and failure mode
     └── PLAN.md             the original research & design plan
 ```
 
