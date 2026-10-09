@@ -198,7 +198,16 @@ def domain_level(persona, v: dict) -> tuple[str | None, dict]:
 
 
 def title_level(persona, v: dict) -> tuple[str | None, dict]:
-    if not persona.titles or not v["headlines"]:
+    if not persona.titles:
+        return None, {}
+    if not v["headlines"]:
+        # no headline (e.g. evidence came from a post): an exact multi-word title phrase
+        # in the person's own writing still counts, e.g. "...need a Principal Security Engineer"
+        text = tu.norm(" ".join(v["posts"][:5]) + " " + v["about"])
+        for t in persona.titles:
+            nt = tu.norm(t)
+            if len(nt.split()) >= 2 and f" {nt} " in f" {text} ":
+                return "weak", {"phrase_in_text": t}
         return None, {}
     head = tu.expand_title(" ".join(v["headlines"]))
     best = max(fuzz.token_set_ratio(tu.expand_title(t), head) for t in persona.titles)

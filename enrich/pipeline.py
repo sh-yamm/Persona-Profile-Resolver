@@ -100,7 +100,9 @@ class Resolver:
         for c in pool.values():
             same = len(full_names) - (1 if c in full_names else 0)
             if not p.name_complete:
-                same = max(same, 3)         # first-name-only: always assume many namesakes
+                # first name only: always assume many namesakes; a last initial
+                # ("Damion W.") already rules most of them out
+                same = max(same, 1 if p.last_initial else 3)
             c.score = scorer.raw_score(c.levels, same)
             c.prob = scorer.probability(c.score)
             c.evidence["_same_name_candidates"] = same

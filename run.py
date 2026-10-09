@@ -35,6 +35,12 @@ def main():
                     help="fetch LinkedIn pages with plain HTTP instead of the anonymous Chrome browser")
     ap.add_argument("--headless", action="store_true", help="run the anonymous browser headless")
     args = ap.parse_args()
+    # names/posts contain any script (ş, é, emoji); Windows defaults redirected output to cp1252
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
     if args.delay_scale is not None:
         os.environ["PPR_DELAY_SCALE"] = str(args.delay_scale)
@@ -61,7 +67,8 @@ def main():
     if args.limit:
         personas = personas[:args.limit]
 
-    _lock = _single_instance_lock(config.CACHE_DB.parent / "run.lock")  # noqa: F841 (held open)
+    # offline re-scoring never touches the network, so it may run alongside a live run
+    _lock = None if args.offline else _single_instance_lock(config.CACHE_DB.parent / "run.lock")  # noqa: F841
     cache = Cache(config.CACHE_DB)
     fetcher = Fetcher(cache)
     face = None
