@@ -62,7 +62,7 @@ class Candidate:
 
 def _name_from_slug(url: str) -> str:
     """'/in/morgan-rice-4b2a17' -> 'morgan rice'. Only for multi-part slugs; a fused slug
-    like 'zhawtof' says nothing reliable about the name and is left unknown."""
+    like 'jroe' says nothing reliable about the name and is left unknown."""
     slug = url.rstrip("/").split("/")[-1].lower()
     parts = [x for x in re.split(r"[-_]", slug) if x and not re.search(r"\d", x)]
     return " ".join(parts) if len(parts) >= 2 else ""
@@ -101,7 +101,7 @@ def name_level(persona, cand_name: str) -> tuple[str | None, dict]:
         if tu.norm(persona.last).replace(" ", "") in joined:
             last_sim = max(last_sim, 0.97)
         ev["last_sim"] = round(last_sim, 3)
-        # candidate shows only an initial ("Ihor D.") that agrees with the persona's surname
+        # candidate shows only an initial ("Jane D.") that agrees with the persona's surname
         if first_sim >= 0.9 and rest and len(rest[-1]) == 1 and pl[-1].startswith(rest[-1]):
             return "partial", ev
         if first_sim >= 0.9 and last_sim >= 0.93:
@@ -124,7 +124,7 @@ def name_level(persona, cand_name: str) -> tuple[str | None, dict]:
 # --------------------------------------------------------------------------- #
 
 def _prefix_match(a: str, b: str) -> bool:
-    """'spiffworkflow' ~ 'spiffworks': long shared prefix of two long tokens."""
+    """'acmeflowcraft' ~ 'acmeflow': long shared prefix of two long tokens."""
     n = 0
     for x, y in zip(a, b):
         if x != y:
@@ -158,7 +158,7 @@ def _text_contains_company(company: str, text: str) -> bool:
 
 
 def company_level(persona, v: dict) -> tuple[str | None, dict]:
-    # rare intro words (>= 8 chars, e.g. 'spiffworkflow') act like a stated company
+    # rare intro words (>= 8 chars, e.g. 'acmeflowcraft') act like a stated company
     rare = [k for k in getattr(persona, "rare_terms", []) if len(k) >= 8]
     strong, weak = persona.companies + rare, persona.weak_companies
     li_slugs = {u.rstrip("/").split("/")[-1] for u in extras_li_companies(persona)}
@@ -274,7 +274,7 @@ def social_level(persona, v: dict, extras: dict, url: str) -> tuple[str | None, 
     for h in handles:
         if len(h) >= 4 and re.search(rf"(twitter\.com|x\.com|github\.com)/{re.escape(h)}\b|@{re.escape(h)}\b", blob):
             return "match", {"handle": h}
-    # handle spelled from the candidate's own name tokens: @rajavijayach ~ 'Raja Vijaya Ch'
+    # handle spelled from the candidate's own name tokens: @janedoex ~ 'Jane Doe X'
     name_glued = tu.norm(v["name"]).replace(" ", "")
     all_handles = handles + ([persona.bluesky.split(".")[0].lower()] if persona.bluesky else [])
     for h in all_handles:

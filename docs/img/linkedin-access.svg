@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="470" viewBox="0 0 1040 470" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="1040" height="470" rx="14" fill="#ffffff"/>
+  <text x="520" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">LinkedIn access strategy: cheapest evidence first</text>
+  <text x="520" y="54" text-anchor="middle" font-size="12" fill="#475569">observed in practice: guests get a small per-IP quota of profile views; post and company pages stay readable longer; search snippets cost LinkedIn nothing</text>
+
+  <g font-size="11.5">
+    <rect x="20" y="80" width="235" height="200" rx="10" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="137" y="104" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">1 · Search snippet</text>
+    <text x="137" y="122" text-anchor="middle" fill="#14532d">0 LinkedIn requests</text>
+    <text x="32" y="148" fill="#334155">name, headline, company,</text>
+    <text x="32" y="164" fill="#334155">location, education</text>
+    <text x="32" y="188" fill="#334155">every candidate gets scored</text>
+    <text x="32" y="204" fill="#334155">here first; only the top-3</text>
+    <text x="32" y="220" fill="#334155">go further</text>
+    <text x="32" y="250" fill="#15803d" font-weight="700">resolves most Type-1 personas</text>
+
+    <rect x="273" y="80" width="235" height="200" rx="10" fill="#e0e7ff" stroke="#0a66c2"/>
+    <text x="390" y="104" text-anchor="middle" font-size="13" font-weight="700" fill="#0a66c2">2 · Profile page</text>
+    <text x="390" y="122" text-anchor="middle" fill="#0a66c2">anonymous real Chrome</text>
+    <text x="285" y="148" fill="#334155">location + country, current</text>
+    <text x="285" y="164" fill="#334155">company + its website, school,</text>
+    <text x="285" y="180" fill="#334155">recent posts, profile photo</text>
+    <text x="285" y="204" fill="#334155">scarcest resource: a few views</text>
+    <text x="285" y="220" fill="#334155">per IP before the authwall</text>
+    <text x="285" y="250" fill="#1d4ed8" font-weight="700">richest single source</text>
+
+    <rect x="526" y="80" width="235" height="200" rx="10" fill="#ede9fe" stroke="#7c3aed"/>
+    <text x="643" y="104" text-anchor="middle" font-size="13" font-weight="700" fill="#4c1d95">3 · Post pages</text>
+    <text x="643" y="122" text-anchor="middle" fill="#4c1d95">plain HTTP (curl_cffi)</text>
+    <text x="538" y="148" fill="#334155">JSON-LD author: real name,</text>
+    <text x="538" y="164" fill="#334155">profile URL, profile photo,</text>
+    <text x="538" y="180" fill="#334155">followers + the post text</text>
+    <text x="538" y="204" fill="#334155">used when the profile is walled</text>
+    <text x="538" y="220" fill="#334155">or has no photo</text>
+    <text x="538" y="250" fill="#6d28d9" font-weight="700">feeds the face sweep</text>
+
+    <rect x="779" y="80" width="241" height="200" rx="10" fill="#fef3c7" stroke="#d97706"/>
+    <text x="899" y="104" text-anchor="middle" font-size="13" font-weight="700" fill="#78350f">4 · Company page</text>
+    <text x="899" y="122" text-anchor="middle" fill="#78350f">plain HTTP (curl_cffi)</text>
+    <text x="791" y="148" fill="#334155">industry, size bucket,</text>
+    <text x="791" y="164" fill="#334155">website, HQ, description</text>
+    <text x="791" y="188" fill="#334155">checks company_size and</text>
+    <text x="791" y="204" fill="#334155">company_industry against the</text>
+    <text x="791" y="220" fill="#334155">candidate's real employer</text>
+    <text x="791" y="250" fill="#b45309" font-weight="700">key for Type-2 personas</text>
+  </g>
+  <g stroke="#334155" stroke-width="1.6" marker-end="url(#a)">
+    <line x1="255" y1="180" x2="271" y2="180"/>
+    <line x1="508" y1="180" x2="524" y2="180"/>
+    <line x1="761" y1="180" x2="777" y2="180"/>
+  </g>
+
+  <rect x="20" y="300" width="500" height="150" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="36" y="324" font-size="13" font-weight="700" fill="#0f172a">Pacing (no published limits exist — tuned on observed behaviour)</text>
+  <g font-size="11.5" fill="#334155">
+    <text x="36" y="348">LinkedIn 4–9 s · each search engine 2–5 s · other sites 1–3 s</text>
+    <text x="36" y="368">short pause every 25–40 requests to the same host</text>
+    <text x="36" y="388">HTTP 999 / 429 / authwall → cool-down 2 min, doubling to 30 min,</text>
+    <text x="36" y="404">per channel (profile · posts · company), reset after a success</text>
+    <text x="36" y="424">a blocked fetch never stalls the run: the persona is scored on</text>
+    <text x="36" y="440">what it has; retry rounds fetch the most uncertain ones later</text>
+  </g>
+
+  <rect x="540" y="300" width="480" height="150" rx="10" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="556" y="324" font-size="13" font-weight="700" fill="#7c2d12">What the system never does</text>
+  <g font-size="11.5" fill="#7c2d12">
+    <text x="556" y="348">✗ log in, or use cookies / sessions from any account</text>
+    <text x="556" y="368">✗ bypass an authwall (no spoofed referrers, no proxy tricks)</text>
+    <text x="556" y="388">✗ fetch junk URLs scraped from markup (they trigger blocks)</text>
+    <text x="556" y="408">✗ run twice in parallel (OS-level single-instance lock)</text>
+    <text x="556" y="428">✓ cache everything: a re-run asks LinkedIn only for what is missing</text>
+  </g>
+</svg>

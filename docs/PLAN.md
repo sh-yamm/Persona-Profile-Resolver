@@ -10,9 +10,9 @@
 
 | | Type 1 (`dataset1.json`, 12 rows) | Type 2 (`dataset2.json`, 5 rows) |
 |---|---|---|
-| Name | Full name, sometimes noisy: `"Eric Doty (Superpath)"`, handle `"DamionW"` | First name only (`"Peter"`), or first + initial (`"Uriel S."`) |
+| Name | Full name, sometimes noisy: `"Jane Roe (Acme)"`, handle `"JordanW"` | First name only (`"Peter"`), or first + initial (`"Alex S."`) |
 | Image | Always (Google Drive link) | 2/5 |
-| Intro | 10/12 — company, title, URLs (`tightknit.ai`, `m1-project.com`, `deallite.uk`) | Generic: `"Founder in US"`, `"Managing Consultant in UK"` |
+| Intro | 10/12 — company, title, URLs (`example-community.ai`, `acme-labs.com`, `example.uk`) | Generic: `"Founder in US"`, `"Managing Consultant in UK"` |
 | Timezone | Always (→ region/country prior) | Never |
 | Industry / size | Mostly null | Always (`"Construction Software"`, `"201–500 Employees"`) |
 | Social | 3/12 (Twitter, Bluesky) | None |
@@ -23,7 +23,7 @@ Type 1 is a search-and-verify problem. Type 2 is a needle in a haystack: the nam
 
 | Probe | Result |
 |---|---|
-| `ddgs` backend `bing` / `yahoo` | ✅ `Gaurav Nemade Inventive.ai linkedin` → `linkedin.com/in/gauravnemade` at the top, with a rich snippet (headline, company) |
+| `ddgs` backend `bing` / `yahoo` | ✅ `<Full Name> <Company> linkedin` → the right `linkedin.com/in/<slug>` at the top, with a rich snippet (headline, company) |
 | `ddgs` backend `duckduckgo` / `brave` / `google` / `mojeek` | ❌ empty this run (likely throttled by the earlier rapid probe). Keep as rotating fallbacks |
 | `curl_cffi` (`impersonate="chrome"`) GET `linkedin.com/in/<slug>` | ✅ HTTP 200, no authwall, full guest HTML with JSON-LD `Person`: `name`, `worksFor[]` (current company + company URL), `address` (city, country), `image` (profile photo URL), `awards`, plus recent posts and `og:description` ("Experience · Education · Location"). Past employers and `jobTitle` are **masked** (`****`) for guests |
 | Google Drive `uc?export=download&id=…` | ✅ returns `image/jpeg` directly |
@@ -60,12 +60,12 @@ persona.json ─► 1 Normalize ─► 2 Candidate generation ─► 3 Snippet p
 ```
 
 **1 · Normalize** (`persona.py`)
-- Clean the name: strip `(Superpath)`-style suffixes into a company hint, split handles (`DamionW` → `Damion` + initial `W`), handle initials (`Uriel S.`), and a nickname table (Chris↔Christopher, Jeff↔Jeffrey).
+- Clean the name: strip `(Acme)`-style suffixes into a company hint, split handles (`JordanW` → `Jordan` + initial `W`), handle initials (`Alex S.`), and a nickname table (Chris↔Christopher, Jeff↔Jeffrey).
 - Parse the intro with regex and heuristics: `@ Company`, `at Company`, `X of Y`, URLs → domains, title keywords, `in UK/US` → country. An LLM parse can be added as an option.
 - Map timezone to a country/region prior (`Asia/Kolkata` → IN, `America/*` → US/CA, `Africa/Monrovia` is often just UTC+0, so give it a weak prior).
 
 **2 · Candidate generation** (`search.py`, `sources.py`), in order of precision:
-1. **Direct links:** fetch the persona's own websites (`tightknit.ai`, `m1-project.com`, `deallite.uk`, …) and social bios (Bluesky has an open public API; Twitter only via search), then pull any `linkedin.com/in/…` links. These are near-certain hits.
+1. **Direct links:** fetch the persona's own websites (`example-community.ai`, `acme-labs.com`, `example.uk`, …) and social bios (Bluesky has an open public API; Twitter only via search), then pull any `linkedin.com/in/…` links. These are near-certain hits.
 2. **Search ladder:** start tight (`"Full Name" "Company" site:linkedin.com/in`), then loosen (`Full Name Company linkedin`, `Full Name Title Country linkedin`, `Name "domain.com"`). Use Bing first, rotating through Yahoo, DDG and Brave, and stop once strong candidates appear.
 3. **Type 2:** search for the company first (`site:linkedin.com/company <industry> <size>`), then `"<FirstName>" <role> <company>`. The guest company page exposes industry and employee count.
 4. **Slug guess:** try `linkedin.com/in/firstname-lastname` and `firstnamelastname` as candidates.
@@ -104,7 +104,7 @@ persona.json ─► 1 Normalize ─► 2 Candidate generation ─► 3 Snippet p
 ```json
 {
   "input": { ...persona... },
-  "linkedin_url": "https://www.linkedin.com/in/gauravnemade",
+  "linkedin_url": "https://www.linkedin.com/in/<slug>",
   "confidence": 0.94,
   "confidence_interval": [0.88, 0.97],
   "status": "matched | ambiguous | not_found",

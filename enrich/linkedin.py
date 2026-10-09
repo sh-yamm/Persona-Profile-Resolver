@@ -60,7 +60,7 @@ def _clean(s) -> str:
 
 
 def _unredirect(href: str) -> str:
-    """linkedin.com/redir/redirect?url=https%3A%2F%2Finventive%2Eai -> https://inventive.ai"""
+    """linkedin.com/redir/redirect?url=https%3A%2F%2Facme%2Eai -> https://acme.ai"""
     if "/redir/redirect" in href:
         q = up.parse_qs(up.urlparse(href).query).get("url", [""])[0]
         return up.unquote(q.replace("%2E", "."))

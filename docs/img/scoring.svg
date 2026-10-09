@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="610" viewBox="0 0 1040 610" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="1040" height="610" rx="14" fill="#ffffff"/>
+  <text x="520" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">Verification model: from field agreement to a calibrated probability</text>
+  <text x="520" y="54" text-anchor="middle" font-size="12" fill="#475569">Fellegi–Sunter record linkage: each field level contributes log(m/u) — how much likelier it is for the true person than for a same-name stranger</text>
+
+  <!-- weights table -->
+  <rect x="20" y="72" width="470" height="518" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="36" y="96" font-size="13" font-weight="700" fill="#0f172a">Field levels and weights (scorer.WEIGHTS)</text>
+  <g font-size="11.5">
+    <text x="36" y="122" font-weight="700" fill="#334155">field</text>
+    <text x="126" y="122" font-weight="700" fill="#15803d">agrees (+)</text>
+    <text x="330" y="122" font-weight="700" fill="#b91c1c">disagrees (−)</text>
+    <line x1="36" y1="130" x2="476" y2="130" stroke="#cbd5e1"/>
+
+    <text x="36" y="152" fill="#0f172a">name</text>
+    <text x="126" y="152" fill="#15803d">full +5 · partial +2.5 · first+initial +2.5</text>
+    <text x="330" y="168" fill="#b91c1c">mismatch −15 (veto)</text>
+    <text x="126" y="168" fill="#15803d">first only +1</text>
+
+    <text x="36" y="194" fill="#0f172a">face</text>
+    <text x="126" y="194" fill="#15803d">≥0.50 +6 · ≥0.363 +3</text>
+    <text x="330" y="194" fill="#b91c1c">&lt;0.25 −2.5</text>
+
+    <text x="36" y="220" fill="#0f172a">social</text>
+    <text x="126" y="220" fill="#15803d">handle/link match +6 · handle≈name +3.5</text>
+
+    <text x="36" y="246" fill="#0f172a">domain</text>
+    <text x="126" y="246" fill="#15803d">intro domain = company site +5</text>
+    <text x="330" y="246" fill="#b91c1c">−0.5</text>
+
+    <text x="36" y="272" fill="#0f172a">company</text>
+    <text x="126" y="272" fill="#15803d">strong +4.5 · weak +1.8</text>
+    <text x="330" y="272" fill="#b91c1c">mismatch −1.2</text>
+
+    <text x="36" y="298" fill="#0f172a">source</text>
+    <text x="126" y="298" fill="#15803d">persona link +3 · tight top +0.6</text>
+    <text x="330" y="298" fill="#b91c1c">slug guess −0.5</text>
+
+    <text x="36" y="324" fill="#0f172a">location</text>
+    <text x="126" y="324" fill="#15803d">stated +2 · tz country +1.4</text>
+    <text x="330" y="324" fill="#b91c1c">−2.5 / −1.5</text>
+
+    <text x="36" y="350" fill="#0f172a">title</text>
+    <text x="126" y="350" fill="#15803d">strong +2 · weak +0.8</text>
+    <text x="330" y="350" fill="#b91c1c">−0.6</text>
+
+    <text x="36" y="376" fill="#0f172a">industry</text>
+    <text x="126" y="376" fill="#15803d">company page +1.6 · text +1.2</text>
+    <text x="330" y="376" fill="#b91c1c">−0.8 / −0.4</text>
+
+    <text x="36" y="402" fill="#0f172a">size</text>
+    <text x="126" y="402" fill="#15803d">bucket overlaps +1.2</text>
+    <text x="330" y="402" fill="#b91c1c">−1.5</text>
+
+    <text x="36" y="428" fill="#0f172a">keywords</text>
+    <text x="126" y="428" fill="#15803d">high +1.5 · some +0.6</text>
+    <text x="330" y="428" fill="#b91c1c">none −0.3</text>
+
+    <line x1="36" y1="444" x2="476" y2="444" stroke="#cbd5e1"/>
+    <text x="36" y="468" fill="#334155">missing on either side → level None → weight 0</text>
+    <text x="36" y="486" fill="#334155">(absence of evidence is never evidence of absence)</text>
+    <text x="36" y="514" fill="#0f172a" font-weight="700">prior = −5</text>
+    <text x="36" y="532" fill="#334155">a random candidate is unlikely to be the person</text>
+    <text x="36" y="558" fill="#0f172a" font-weight="700">namesake penalty = −0.9 · log₂(1 + n_same_name)</text>
+    <text x="36" y="576" fill="#334155">common names need more corroboration</text>
+  </g>
+
+  <!-- flow -->
+  <g font-size="12">
+    <rect x="530" y="96" width="220" height="70" rx="10" fill="#fce7f3" stroke="#db2777"/>
+    <text x="640" y="122" text-anchor="middle" font-weight="700" fill="#831843">score = prior + Σ wᵢ</text>
+    <text x="640" y="142" text-anchor="middle" fill="#831843">− namesake penalty</text>
+    <text x="640" y="158" text-anchor="middle" fill="#831843" font-size="11">(log-odds)</text>
+
+    <rect x="530" y="200" width="220" height="70" rx="10" fill="#ede9fe" stroke="#7c3aed"/>
+    <text x="640" y="226" text-anchor="middle" font-weight="700" fill="#4c1d95">p = σ(a · score + b)</text>
+    <text x="640" y="246" text-anchor="middle" fill="#4c1d95" font-size="11">Platt scaling fitted by calibrate.py</text>
+    <text x="640" y="262" text-anchor="middle" fill="#4c1d95" font-size="11">on hand-verified labels (L2, C=0.3)</text>
+
+    <rect x="530" y="304" width="220" height="86" rx="10" fill="#e0f2fe" stroke="#0284c7"/>
+    <text x="640" y="328" text-anchor="middle" font-weight="700" fill="#0c4a6e">90% confidence interval</text>
+    <text x="640" y="348" text-anchor="middle" fill="#0c4a6e" font-size="11">400 draws: every weight × e^N(0, 0.35)</text>
+    <text x="640" y="364" text-anchor="middle" fill="#0c4a6e" font-size="11">× one of 200 bootstrap (a, b) refits</text>
+    <text x="640" y="380" text-anchor="middle" fill="#0c4a6e" font-size="11">→ 5th – 95th percentile</text>
+
+    <rect x="530" y="424" width="220" height="70" rx="10" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="640" y="450" text-anchor="middle" font-weight="700" fill="#14532d">fields_validated</text>
+    <text x="640" y="470" text-anchor="middle" fill="#14532d" font-size="11">#fields that agree / #fields comparable</text>
+    <text x="640" y="486" text-anchor="middle" fill="#14532d" font-size="11">+ lists of agreed / disagreed fields</text>
+  </g>
+  <g stroke="#334155" stroke-width="1.6" marker-end="url(#a)">
+    <line x1="490" y1="300" x2="528" y2="131"/>
+    <line x1="640" y1="166" x2="640" y2="198"/>
+    <line x1="640" y1="270" x2="640" y2="302"/>
+    <line x1="640" y1="390" x2="640" y2="422"/>
+  </g>
+
+  <!-- decision -->
+  <rect x="790" y="96" width="230" height="398" rx="10" fill="#fff7ed" stroke="#fb923c"/>
+  <text x="905" y="122" text-anchor="middle" font-size="13" font-weight="700" fill="#7c2d12">Decision (pipeline._result)</text>
+  <g font-size="11.5" fill="#431407">
+    <rect x="806" y="140" width="198" height="64" rx="8" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="905" y="162" text-anchor="middle" font-weight="700">matched</text>
+    <text x="905" y="180" text-anchor="middle">p ≥ 0.50 and runner-up</text>
+    <text x="905" y="196" text-anchor="middle">at least 0.10 behind</text>
+
+    <rect x="806" y="216" width="198" height="64" rx="8" fill="#fef9c3" stroke="#ca8a04"/>
+    <text x="905" y="238" text-anchor="middle" font-weight="700">ambiguous</text>
+    <text x="905" y="256" text-anchor="middle">p ≥ 0.50 but runner-up</text>
+    <text x="905" y="272" text-anchor="middle">within 0.10</text>
+
+    <rect x="806" y="292" width="198" height="64" rx="8" fill="#ffedd5" stroke="#ea580c"/>
+    <text x="905" y="314" text-anchor="middle" font-weight="700">low_confidence</text>
+    <text x="905" y="332" text-anchor="middle">p &lt; 0.50 — best guess is</text>
+    <text x="905" y="348" text-anchor="middle">still returned with its CI</text>
+
+    <rect x="806" y="368" width="198" height="52" rx="8" fill="#fee2e2" stroke="#dc2626"/>
+    <text x="905" y="390" text-anchor="middle" font-weight="700">not_found</text>
+    <text x="905" y="408" text-anchor="middle">no candidate at all</text>
+
+    <text x="905" y="446" text-anchor="middle" fill="#7c2d12">the best guess is always output, so</text>
+    <text x="905" y="462" text-anchor="middle" fill="#7c2d12">top-1 accuracy is maximised while the</text>
+    <text x="905" y="478" text-anchor="middle" fill="#7c2d12">confidence tells you how much to trust it</text>
+  </g>
+  <line x1="750" y1="230" x2="788" y2="230" stroke="#334155" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <rect x="530" y="520" width="490" height="70" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="546" y="544" font-size="12" font-weight="700" fill="#0f172a">Worked example (a verified persona)</text>
+  <text x="546" y="564" font-size="11.5" fill="#334155">−5 prior +5 name +4.5 company +5 domain +2 title +6 face +1.5 keywords +1.2 industry</text>
+  <text x="546" y="580" font-size="11.5" fill="#334155">−1.5 location(tz differs) +0.6 source = +19.3 → p ≈ 1.00, CI [1.00, 1.00], 7/8 fields agree</text>
+</svg>

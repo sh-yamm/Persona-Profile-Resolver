@@ -28,11 +28,11 @@ RAW = {"name": "Jane Doe (Acme)", "image": None,
 
 
 def test_name_parsing():
-    assert persona.parse_name("DamionW")["last_initial"] == "W"
-    n = persona.parse_name("Uriel S.")
-    assert (n["first"], n["last_initial"], n["complete"]) == ("Uriel", "S", False)
-    n = persona.parse_name("Eric Doty (Superpath)")
-    assert (n["first"], n["last"], n["hint"]) == ("Eric", "Doty", "Superpath")
+    assert persona.parse_name("JordanW")["last_initial"] == "W"
+    n = persona.parse_name("Alex S.")
+    assert (n["first"], n["last_initial"], n["complete"]) == ("Alex", "S", False)
+    n = persona.parse_name("Jane Roe (Acme)")
+    assert (n["first"], n["last"], n["hint"]) == ("Jane", "Roe", "Acme")
 
 
 def test_intro_parsing():
@@ -67,8 +67,8 @@ def test_snippet_and_url_canonicalisation():
                       "625 followers 500+ connections See your mutual connections View Source")
     assert s["location"].endswith("New York, United States") and s["company"] == "View Source"
     # junk scraped from page markup must never become a fetch (it triggers HTTP 999)
-    assert canonical_profile("https://www.linkedin.com/in/carrie-chan-%2943%3At751%2Chello") is None
-    assert canonical_profile("https://www.linkedin.com/in/carrie-chan-%7Cwww.linkedin.com") is None
+    assert canonical_profile("https://www.linkedin.com/in/jane-doe-%2943%3At751%2Chello") is None
+    assert canonical_profile("https://www.linkedin.com/in/jane-doe-%7Cwww.linkedin.com") is None
 
 
 def _cand(html=PROFILE_HTML, face=None):
@@ -164,7 +164,7 @@ def test_company_facts_size_and_industry():
 
 def test_enrichment_folds_site_and_bio_into_persona():
     p = persona.build({"name": "Jane Doe", "intro": "Story nerd (https://example.community)"})
-    notes = persona.enrich(p, {"site_names": ["StoryChamp"], "mentions": ["Jane Doe is Head of Community at StoryChamp, based in Austin, TX"],
-                               "twitter_bio": "", "bsky_bio": "", "li_companies": ["https://www.linkedin.com/company/storychamp"]})
-    assert "StoryChamp" in p.companies and any("Head of Community" in t for t in p.titles)
+    notes = persona.enrich(p, {"site_names": ["TaleHub"], "mentions": ["Jane Doe is Head of Community at TaleHub, based in Austin, TX"],
+                               "twitter_bio": "", "bsky_bio": "", "li_companies": ["https://www.linkedin.com/company/talehub"]})
+    assert "TaleHub" in p.companies and any("Head of Community" in t for t in p.titles)
     assert p.li_companies and notes

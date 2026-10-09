@@ -174,7 +174,7 @@ def tokens(s: str | None) -> list[str]:
 
 def norm_company(s: str | None) -> str:
     s = strip_accents(s or "").lower()
-    s = re.sub(r"\(.*?\)", " ", s)                  # "Inventive AI (YC S23)" -> "inventive ai"
+    s = re.sub(r"\(.*?\)", " ", s)                  # "Acme AI (YC S23)" -> "acme ai"
     s = re.sub(r"\.(com|ai|io|co|uk|life|net|org|app|dev|tech|so|xyz)\b", " ", s)
     s = re.sub(r"[^a-z0-9]+", " ", s)
     s = COMPANY_SUFFIXES.sub(" ", s)

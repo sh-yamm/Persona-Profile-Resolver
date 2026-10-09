@@ -46,7 +46,7 @@ def _site_name(tree, url: str) -> str:
     candidates = tree.xpath("//meta[@property='og:site_name']/@content") + \
         tree.xpath("//meta[@name='application-name']/@content") + tree.xpath("//title/text()")
     for raw in candidates:
-        # "M1-Project | AI marketing", "SkilledUp Life - A global ..." -> the name part only
+        # "Acme-Labs | AI marketing", "Acme Life - A global ..." -> the name part only
         part = re.split(r"\s+[|\-–—:·]\s+", raw.strip())[0].strip() if raw.strip() else ""
         if 2 < len(part) <= 40:
             return part

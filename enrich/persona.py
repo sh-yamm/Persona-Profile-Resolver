@@ -75,7 +75,7 @@ def parse_name(name: str) -> dict:
     parts = [p for p in name.split() if p]
     if len(parts) == 1:
         p = parts[0]
-        m = re.match(r"^([A-Z][a-z]+)([A-Z])\.?$", p)          # DamionW
+        m = re.match(r"^([A-Z][a-z]+)([A-Z])\.?$", p)          # JordanW
         m2 = re.match(r"^([A-Z][a-z]+)([A-Z][a-z]{2,})$", p)    # JohnSmith
         if m:
             out["first"], out["last_initial"] = m.group(1), m.group(2)
@@ -186,7 +186,7 @@ def parse_intro(intro: str) -> dict:
 
 
 def clean_social_bio(text: str, own_handles: list[str]) -> str:
-    """Search-snippet bios carry page boilerplate ('Eric Doty (@DotyContent) / X', 'on X:',
+    """Search-snippet bios carry page boilerplate ('Jane Roe (@janeroe) / X', 'on X:',
     'Posts / X'). Strip it, drop the persona's own handle, and turn company-style handles
     ('@dock_us', '@butter_hq') into plain names so they parse as companies."""
     if not text:

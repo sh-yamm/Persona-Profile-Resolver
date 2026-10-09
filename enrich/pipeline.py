@@ -24,7 +24,7 @@ def _q_company(c: str) -> str:
 
 
 def _distinctive(p) -> list[str]:
-    """Intro words specific enough to search on ('spiffworkflow', 'neovim'): not generic,
+    """Intro words specific enough to search on ('acmeflowcraft', 'neovim'): not generic,
     not a country/name/company already used."""
     used = set(tu.tokens(p.full_name)) | {w for c in p.companies + p.weak_companies for w in tu.tokens(c)}
     out = []
@@ -101,7 +101,7 @@ class Resolver:
             same = len(full_names) - (1 if c in full_names else 0)
             if not p.name_complete:
                 # first name only: always assume many namesakes; a last initial
-                # ("Damion W.") already rules most of them out
+                # ("Jordan W.") already rules most of them out
                 same = max(same, 1 if p.last_initial else 3)
             c.score = scorer.raw_score(c.levels, same)
             c.prob = scorer.probability(c.score)
@@ -299,7 +299,7 @@ class Resolver:
 
 
 def _name_for_fused_slug(p, url: str) -> str:
-    """'damionwaltermeyer' + persona first 'Damion' -> 'damion waltermeyer'."""
+    """'janeroeburg' + persona first 'Jane' -> 'jane roeburg'."""
     slug = re.sub(r"[-_]?\d.*$", "", search.slug_of(url).lower())
     if "-" in slug:
         return slug.replace("-", " ")
@@ -318,7 +318,7 @@ def _snippet_fits_url(snippet: dict, url: str) -> bool:
         return True                       # opaque slug (e.g. ACoAAB...): cannot judge
     if any(t in slug or t[:4] in slug for t in toks):
         return True
-    # transliterations / nicknames: 'Ihor' on /in/igor1313
+    # transliterations / nicknames: 'Yuri' on /in/iurii1990
     from rapidfuzz.distance import JaroWinkler
     return any(JaroWinkler.similarity(t, slug[i:i + len(t)]) >= 0.8
                for t in toks for i in range(0, max(1, len(slug) - len(t) + 1)))

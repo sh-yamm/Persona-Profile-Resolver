@@ -18,7 +18,7 @@ def canonical_profile(url: str) -> str | None:
         return None
     slug = up.unquote(m.group(1)).strip().lower()
     # real vanity slugs: letters (any script), digits, '-' and '_' only, 3..100 chars.
-    # Scraped HTML often yields junk like 'carrie-chan-)43:t751,hello'; fetching those
+    # Scraped HTML often yields junk like 'jane-doe-)43:t751,hello'; fetching those
     # wastes a LinkedIn request and tends to trigger HTTP 999.
     if not slug or slug in {"me", "edit"} or not re.fullmatch(r"[\w-]{3,100}", slug):
         return None
@@ -29,7 +29,7 @@ LI_POST_RE = re.compile(r"https?://(?:[a-z]{2,3}\.)?linkedin\.com/posts/([\w%-]+
 
 
 def profile_from_post(url: str) -> str | None:
-    """/posts/damionwaltermeyer_hey-everyone-... -> /in/damionwaltermeyer (the author)."""
+    """/posts/janeroeburg_hey-everyone-... -> /in/janeroeburg (the author)."""
     m = LI_POST_RE.search(url or "")
     return canonical_profile(f"https://www.linkedin.com/in/{m.group(1)}") if m else None
 
@@ -88,7 +88,7 @@ class Searcher:
 
 # --------------------------------------------------------------------------- #
 # Snippet parsing: LinkedIn search results carry a lot of the profile already.
-#   title: "Gaurav Nemade - Co-Founder @ Inventive.ai | LinkedIn"
+#   title: "Jane Doe - Co-Founder @ Acme.ai | LinkedIn"
 #          "Jane Doe – Head of Sales – Acme | LinkedIn"
 #   body:  "Experience: Acme · Education: MIT · Location: Boston · 500+ connections ..."
 # --------------------------------------------------------------------------- #
