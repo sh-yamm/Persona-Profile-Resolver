@@ -34,6 +34,51 @@ US_STATE_NAMES = {
     "san francisco bay area", "greater seattle area", "new york city metropolitan area",
 }
 
+# major cities that show up alone in LinkedIn locations ("Manchester", "Nanaimo", "Austin")
+CITY_COUNTRY = {
+    "new york": "US", "brooklyn": "US", "san francisco": "US", "los angeles": "US", "seattle": "US",
+    "austin": "US", "boston": "US", "chicago": "US", "denver": "US", "atlanta": "US", "miami": "US",
+    "dallas": "US", "houston": "US", "san diego": "US", "san jose": "US", "mountain view": "US",
+    "palo alto": "US", "portland": "US", "phoenix": "US", "philadelphia": "US", "washington": "US",
+    "arlington": "US", "nashville": "US", "minneapolis": "US", "detroit": "US", "pittsburgh": "US",
+    "salt lake city": "US", "las vegas": "US", "raleigh": "US", "charlotte": "US", "orlando": "US",
+    "murrieta": "US", "riverside": "US", "chino hills": "US", "omaha": "US", "oswego": "US",
+    "toronto": "CA", "vancouver": "CA", "montreal": "CA", "calgary": "CA", "ottawa": "CA",
+    "nanaimo": "CA", "victoria": "CA", "edmonton": "CA", "waterloo": "CA",
+    "manchester": "GB", "birmingham": "GB", "leeds": "GB", "glasgow": "GB", "edinburgh": "GB",
+    "bristol": "GB", "liverpool": "GB", "cambridge": "GB", "oxford": "GB", "cardiff": "GB",
+    "brussels": "BE", "antwerp": "BE", "ghent": "BE", "paris": "FR", "lyon": "FR", "berlin": "DE",
+    "munich": "DE", "hamburg": "DE", "amsterdam": "NL", "rotterdam": "NL", "madrid": "ES",
+    "barcelona": "ES", "lisbon": "PT", "dublin": "IE", "zurich": "CH", "geneva": "CH",
+    "stockholm": "SE", "copenhagen": "DK", "oslo": "NO", "helsinki": "FI", "warsaw": "PL",
+    "kyiv": "UA", "tel aviv": "IL", "jerusalem": "IL", "haifa": "IL", "dubai": "AE",
+    "bengaluru": "IN", "bangalore": "IN", "mumbai": "IN", "delhi": "IN", "new delhi": "IN",
+    "hyderabad": "IN", "pune": "IN", "chennai": "IN", "gurgaon": "IN", "gurugram": "IN", "noida": "IN",
+    "kolkata": "IN", "colombo": "LK", "moratuwa": "LK", "singapore": "SG", "sydney": "AU",
+    "melbourne": "AU", "auckland": "NZ", "wellington": "NZ", "lagos": "NG", "nairobi": "KE",
+    "lusaka": "ZM", "cape town": "ZA", "johannesburg": "ZA", "sao paulo": "BR", "mexico city": "MX",
+}
+
+# abbreviations expanded before comparing titles ("Head of RevOps" ~ "Revenue Operations")
+TITLE_ABBREV = {
+    "revops": "revenue operations", "salesops": "sales operations", "bizops": "business operations",
+    "devops": "devops engineering", "secops": "security operations", "mktg": "marketing",
+    "eng": "engineering", "mgr": "manager", "dir": "director", "svp": "senior vice president",
+    "evp": "executive vice president", "vp": "vice president", "gtm": "go to market",
+    "hr": "human resources", "cs": "customer success", "pm": "product manager", "ops": "operations",
+    "rev": "revenue", "biz": "business", "dev": "developer", "sr": "senior", "jr": "junior",
+}
+
+# generic words that are useless as search terms
+COMMON_WORDS = {
+    "software", "developer", "engineer", "engineering", "business", "letters", "lowercase",
+    "python", "ruby", "bash", "java", "javascript", "devops", "linux", "cloud", "data", "community",
+    "leader", "occasional", "founder", "content", "marketing", "sales", "connections", "experience",
+    "years", "consulting", "tools", "enrichment", "scraping", "senior", "director", "manager",
+    "product", "growth", "startup", "startups", "technology", "tech", "design", "people", "music",
+    "travel", "family", "coffee", "lover", "enthusiast", "passionate", "building", "helping",
+}
+
 # timezone -> (country ISO2 or None, region)
 TZ_COUNTRY = {
     "Asia/Kolkata": "IN", "Asia/Calcutta": "IN", "Europe/London": "GB", "Europe/Brussels": "BE",
@@ -163,6 +208,9 @@ def country_from_text(text: str | None) -> str | None:
     for st in US_STATE_NAMES:
         if f" {st} " in t:
             return "US"
+    for city, iso in sorted(CITY_COUNTRY.items(), key=lambda kv: -len(kv[0])):
+        if f" {city} " in t:
+            return iso
     m = re.search(r",\s*([A-Z]{2})\b", text)
     if m and m.group(1).lower() in US_STATES:
         return "US"
@@ -184,6 +232,10 @@ def tz_prior(tz: str | None) -> tuple[str | None, str | None, bool]:
     region = {"America": "NA", "Europe": "EU", "Asia": None, "Africa": "MEA",
               "Australia": "APAC", "Pacific": "APAC"}.get(head)
     return None, region, True
+
+
+def expand_title(title: str | None) -> str:
+    return " ".join(TITLE_ABBREV.get(w, w) for w in norm(title).split())
 
 
 def seniority(title: str | None) -> int | None:

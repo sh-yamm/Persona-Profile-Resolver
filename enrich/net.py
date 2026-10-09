@@ -47,13 +47,19 @@ class RateLimiter:
     def _family(self, bucket: str) -> str:
         return bucket.split(":", 1)[0]
 
-    def wait(self, bucket: str) -> None:
-        fam = self._family(bucket)
+    def cooling(self, bucket: str) -> float:
+        """Seconds left in this bucket's cool-down (0 if none)."""
         until = self._blocked_until.get(bucket, 0)
         if self.cache is not None:
             until = max(until, float(self.cache.get_json("cooldown", bucket) or 0))
-        if until > time.time():
-            secs = until - time.time()
+        return max(0.0, until - time.time())
+
+    def wait(self, bucket: str, sleep_through_cooldown: bool = True) -> None:
+        fam = self._family(bucket)
+        secs = self.cooling(bucket)
+        if secs > 0:
+            if not sleep_through_cooldown:
+                raise Blocked(f"{bucket} cooling down {secs/60:.0f} more min")
             log(f"  [rate] {bucket} cooling down {secs/60:.1f} min")
             time.sleep(secs)
         lo, hi = config.BUCKET_DELAYS.get(fam, (1.0, 3.0))
@@ -91,6 +97,11 @@ class Fetcher:
     def __init__(self, cache):
         self.cache = cache
         self.limiter = RateLimiter(cache)
+        self._new_session()
+
+    def _new_session(self) -> None:
+        """Fresh anonymous guest session. After a 999 the guest cookies LinkedIn issued are
+        flagged, so they are dropped (on top of the cool-down) - like a visitor clearing cookies."""
         self._session = cffi.Session(impersonate=config.IMPERSONATE)
         self._session.headers.update({"Accept-Language": config.ACCEPT_LANGUAGE})
 
@@ -102,10 +113,12 @@ class Fetcher:
             if hit is not None:
                 return Response(hit["status"], hit["url"], hit["content"].encode("latin-1"), hit["headers"])
 
-        attempts = (config.LINKEDIN_MAX_BLOCK_RETRIES + 1) if linkedin else 2
+        # LinkedIn: never sleep through a cool-down mid-run and never retry a 999 in the
+        # same call; the caller degrades to snippet-only evidence and retries in a later pass.
+        attempts = 1 if linkedin else 2
         last_exc: Exception | None = None
         for attempt in range(attempts):
-            self.limiter.wait(bucket)
+            self.limiter.wait(bucket, sleep_through_cooldown=not linkedin)
             try:
                 r = self._session.get(url, timeout=config.REQUEST_TIMEOUT, allow_redirects=True, **kw)
             except Exception as e:  # network error: short retry
@@ -118,6 +131,7 @@ class Fetcher:
 
             if linkedin and self._is_blocked(resp):
                 cool = self.limiter.strike(bucket)
+                self._new_session()
                 log(f"  [net] LinkedIn block (HTTP {resp.status}) on {url[:70]} -> cool-down {cool/60:.1f} min")
                 last_exc = Blocked(f"HTTP {resp.status} {resp.url}")
                 continue

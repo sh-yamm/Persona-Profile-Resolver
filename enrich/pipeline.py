@@ -23,6 +23,18 @@ def _q_company(c: str) -> str:
     return c.replace("-", " ").strip()
 
 
+def _distinctive(p) -> list[str]:
+    """Intro words specific enough to search on ('spiffworkflow', 'neovim'): not generic,
+    not a country/name/company already used."""
+    used = set(tu.tokens(p.full_name)) | {w for c in p.companies + p.weak_companies for w in tu.tokens(c)}
+    out = []
+    for k in p.keywords:
+        if (len(k) >= 5 and k not in tu.COMMON_WORDS and k not in used
+                and k not in tu.TITLE_WORDS and not tu.country_from_text(k)):
+            out.append(k)
+    return sorted(out, key=len, reverse=True)
+
+
 def _q_title(t: str) -> str:
     t = re.split(r"\s+(?:of|@|at)\s+", t)[0]
     return re.sub(r"\b\d+x\s+", "", t).strip()
@@ -38,7 +50,13 @@ def build_queries(p) -> list[tuple[str, str]]:
         for c in p.companies[:2]:
             q.append((f'"{full}" "{_q_company(c)}" {site}', "tight"))
         if p.titles:
-            q.append((f'"{full}" {_q_title(p.titles[0])} {site}', "tight"))
+            best_title = max(p.titles, key=lambda t: ((tu.seniority(t) or 0), -len(t)))
+            q.append((f'"{full}" {_q_title(best_title)} {site}', "tight"))
+        if p.city_hint:
+            q.append((f'"{full}" {p.city_hint} {site}', "tight"))
+        rare = _distinctive(p)
+        if rare and not p.companies:
+            q.append((f'"{full}" {" ".join(rare[:2])}', "tight"))
         q.append((f'"{full}" {site}', "tight" if not p.companies else "loose"))
         if p.companies:
             q.append((f"{full} {_q_company(p.companies[0])} linkedin", "loose"))
@@ -87,6 +105,14 @@ class Resolver:
             c.prob = scorer.probability(c.score)
             c.evidence["_same_name_candidates"] = same
         return sorted(pool.values(), key=lambda c: c.score, reverse=True)
+
+    @staticmethod
+    def _decided(pool: dict) -> bool:
+        ranked = sorted(pool.values(), key=lambda c: c.prob, reverse=True)
+        if not ranked or not (ranked[0].profile and ranked[0].profile.ok):
+            return False
+        runner_up = ranked[1].prob if len(ranked) > 1 else 0.0
+        return ranked[0].prob >= 0.95 and ranked[0].prob - runner_up >= 0.5
 
     def _add(self, pool, url, source, snippet=None, rank=99, page_profiles=1):
         c = pool.get(url) or Candidate(url=url)
@@ -144,7 +170,11 @@ class Resolver:
         to_fetch = [c for c in ranked if c.levels.get("source") == "persona_link"]
         to_fetch += [c for c in ranked if c not in to_fetch][:max(0, config.TOP_K_FETCH - len(to_fetch))]
         persona_face = self.face.embedding(_drive(p.image_url)) if (self.face and p.image_url) else None
+        # every LinkedIn request is precious: fetch one at a time, best first, and stop as
+        # soon as a fetched profile is decisively ahead of everything else in the pool
         for c in to_fetch:
+            if self._decided(pool):
+                break
             log(f"  [fetch] {c.url}  (snippet p={c.prob:.2f})")
             c.profile = self.li.profile(c.url)
             if c.profile.error == "404":
@@ -152,6 +182,7 @@ class Resolver:
                 continue
             if persona_face and c.profile.ok and c.profile.image_url:
                 c.face_sim = self.face.similarity(persona_face, self.face.embedding(c.profile.image_url))
+            self._score_pool(p, pool, extras)
 
         ranked = self._score_pool(p, pool, extras)
         return self._result(p, ranked, persona_face is not None)
@@ -197,7 +228,12 @@ def _snippet_fits_url(snippet: dict, url: str) -> bool:
     slug = tu.norm(search.slug_of(url)).replace(" ", "")
     if not toks or not re.search(r"[a-z]{4,}", slug):
         return True                       # opaque slug (e.g. ACoAAB...): cannot judge
-    return any(t in slug for t in toks) or any(t[:4] in slug for t in toks)
+    if any(t in slug or t[:4] in slug for t in toks):
+        return True
+    # transliterations / nicknames: 'Ihor' on /in/igor1313
+    from rapidfuzz.distance import JaroWinkler
+    return any(JaroWinkler.similarity(t, slug[i:i + len(t)]) >= 0.8
+               for t in toks for i in range(0, max(1, len(slug) - len(t) + 1)))
 
 
 def _drive(url):

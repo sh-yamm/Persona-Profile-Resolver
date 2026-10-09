@@ -63,6 +63,12 @@ def test_snippet_and_url_canonicalisation():
                       "Experience: Acme Robotics · Location: Austin · 500+ connections")
     assert (s["name"], s["headline"], s["company"], s["location"]) == ("Jane Doe", "Head of Ops", "Acme Robotics", "Austin")
     assert canonical_profile("https://uk.linkedin.com/in/Jane-Doe-12ab/?trk=x") == "https://www.linkedin.com/in/jane-doe-12ab"
+    s = parse_snippet("Jane Doe - LinkedIn", "Jane Doe Design Director @ View Source Brooklyn, New York, United States "
+                      "625 followers 500+ connections See your mutual connections View Source")
+    assert s["location"].endswith("New York, United States") and s["company"] == "View Source"
+    # junk scraped from page markup must never become a fetch (it triggers HTTP 999)
+    assert canonical_profile("https://www.linkedin.com/in/carrie-chan-%2943%3At751%2Chello") is None
+    assert canonical_profile("https://www.linkedin.com/in/carrie-chan-%7Cwww.linkedin.com") is None
 
 
 def _cand(html=PROFILE_HTML, face=None):

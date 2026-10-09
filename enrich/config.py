@@ -45,9 +45,8 @@ BUCKET_BREAKS = {
     "search": (25, (60.0, 150.0)),
 }
 # on HTTP 999 / 429 / authwall: cool down, doubling each time
-BACKOFF_BASE = 15 * 60
+BACKOFF_BASE = 5 * 60
 BACKOFF_MAX = 60 * 60
-LINKEDIN_MAX_BLOCK_RETRIES = int(os.environ.get("PPR_LINKEDIN_RETRIES", "1"))
 
 # --------------------------------------------------------------------------- #
 # Pipeline

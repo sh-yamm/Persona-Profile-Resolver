@@ -17,7 +17,10 @@ def canonical_profile(url: str) -> str | None:
     if not m:
         return None
     slug = up.unquote(m.group(1)).strip().lower()
-    if not slug or slug in {"me", "edit"}:
+    # real vanity slugs: letters (any script), digits, '-' and '_' only, 3..100 chars.
+    # Scraped HTML often yields junk like 'carrie-chan-)43:t751,hello'; fetching those
+    # wastes a LinkedIn request and tends to trigger HTTP 999.
+    if not slug or slug in {"me", "edit"} or not re.fullmatch(r"[\w-]{3,100}", slug):
         return None
     return f"https://www.linkedin.com/in/{up.quote(slug, safe='-_.~')}"
 
@@ -98,6 +101,16 @@ def parse_snippet(title: str, body: str) -> dict:
         m = re.search(r"(?:@|\bat)\s+([A-Z][\w.&'-]*(?:\s+[A-Z][\w.&'-]*){0,3})", out["headline"])
         if m:
             out["company"] = m.group(1)
+    # newer layout: "<Name> <Headline> Brooklyn, New York, United States 625 followers
+    #               500+ connections See your mutual connections <Current company>"
+    if not out["location"]:
+        m = re.search(r"([A-Z][\w.'-]*(?: [A-Z][\w.'-]*)*(?:, [A-Z][\w .'-]+){1,2})\s+[\d,.]+K?\+?\s+followers", b)
+        if m:
+            out["location"] = m.group(1).strip()
+    if not out["company"]:
+        m = re.search(r"mutual connections\s+([^·•|]{2,60}?)(?:\s+(?:Education|Experience|Location|\d)|[·•|]|\.\.\.|$)", b)
+        if m:
+            out["company"] = m.group(1).strip()
     if not out["location"]:
         m = re.search(r"(?:^|[·•]\s*)([A-Z][\w .'-]+,\s*[A-Z][\w .'-]+(?:,\s*[A-Z][\w .'-]+)?)\s*[·•]", b)
         if m:

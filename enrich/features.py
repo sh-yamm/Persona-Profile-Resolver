@@ -33,7 +33,8 @@ class Candidate:
         """Merged facts from the fetched profile (if any) and every search snippet."""
         p = self.profile if (self.profile and self.profile.ok) else None
         snips = self.snippets
-        name = (p.name if p else "") or next((s["name"] for s in snips if s.get("name")), "")
+        name = (p.name if p else "") or next((s["name"] for s in snips if s.get("name")), "") \
+            or _name_from_slug(self.url)
         headlines = [s["headline"] for s in snips if s.get("headline")]
         if p and p.headline:
             headlines.insert(0, p.headline)
@@ -51,6 +52,14 @@ class Candidate:
             "snippet_text": snippet_text, "image_url": p.image_url if p else "",
             "fetched": bool(p),
         }
+
+
+def _name_from_slug(url: str) -> str:
+    """'/in/morgan-rice-4b2a17' -> 'morgan rice'. Only for multi-part slugs; a fused slug
+    like 'zhawtof' says nothing reliable about the name and is left unknown."""
+    slug = url.rstrip("/").split("/")[-1].lower()
+    parts = [x for x in re.split(r"[-_]", slug) if x and not re.search(r"\d", x)]
+    return " ".join(parts) if len(parts) >= 2 else ""
 
 
 # --------------------------------------------------------------------------- #
@@ -86,6 +95,9 @@ def name_level(persona, cand_name: str) -> tuple[str | None, dict]:
         if tu.norm(persona.last).replace(" ", "") in joined:
             last_sim = max(last_sim, 0.97)
         ev["last_sim"] = round(last_sim, 3)
+        # candidate shows only an initial ("Ihor D.") that agrees with the persona's surname
+        if first_sim >= 0.9 and rest and len(rest[-1]) == 1 and pl[-1].startswith(rest[-1]):
+            return "partial", ev
         if first_sim >= 0.9 and last_sim >= 0.93:
             return "full", ev
         if first_sim >= 0.85 and last_sim >= 0.85:
@@ -173,8 +185,8 @@ def domain_level(persona, v: dict) -> tuple[str | None, dict]:
 def title_level(persona, v: dict) -> tuple[str | None, dict]:
     if not persona.titles or not v["headlines"]:
         return None, {}
-    head = " ".join(v["headlines"])
-    best = max(fuzz.token_set_ratio(tu.norm(t), tu.norm(head)) for t in persona.titles)
+    head = tu.expand_title(" ".join(v["headlines"]))
+    best = max(fuzz.token_set_ratio(tu.expand_title(t), head) for t in persona.titles)
     ps = max((tu.seniority(t) or -1) for t in persona.titles)
     cs = tu.seniority(head)
     if best >= 85:

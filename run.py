@@ -25,6 +25,10 @@ def main():
     ap.add_argument("--delay-scale", type=float, default=None,
                     help="multiply all politeness delays (default 1.0; keep >= 1 for real runs)")
     ap.add_argument("--no-face", action="store_true", help="skip face matching")
+    ap.add_argument("--no-retry-pass", action="store_true",
+                    help="don't wait out a LinkedIn cool-down to re-fetch profiles that were blocked")
+    ap.add_argument("--retry-rounds", type=int, default=3,
+                    help="max passes over personas whose profiles could not be fetched (default 3)")
     ap.add_argument("--browser-fallback", action="store_true",
                     help="retry blocked profile fetches in an anonymous Patchright browser")
     args = ap.parse_args()
@@ -76,6 +80,28 @@ def main():
                 results.append({"input": raw, "linkedin_url": None, "confidence": 0.0,
                                 "status": "error", "error": f"{type(e).__name__}: {e}"})
             _write(out, results)
+
+        # second pass: personas whose candidates could not be fetched because LinkedIn
+        # was cooling down. Search results are cached, so this only costs profile fetches.
+        # LinkedIn's guest budget can be ~1 request per cool-down window, so wait the
+        # cool-down out before *each* persona, most promising (highest confidence) first.
+        for rnd in range(0 if args.no_retry_pass else args.retry_rounds):
+            pending = sorted((i for i, r in enumerate(results) if _needs_refetch(r)),
+                             key=lambda i: -results[i].get("confidence", 0))
+            if not pending:
+                break
+            log(f"retry round {rnd + 1}: {len(pending)} persona(s) still need a profile fetch")
+            for i in pending:
+                secs = fetcher.limiter.cooling("linkedin")
+                if secs:
+                    log(f"  waiting {secs / 60:.1f} min for LinkedIn cool-down")
+                    time.sleep(secs)
+                log(f"[retry {results[i]['input'].get('name')}]")
+                try:
+                    results[i] = resolver.resolve(personas[i])
+                except Exception as e:
+                    log(f"  !! {type(e).__name__}: {e}")
+                _write(out, results)
     finally:
         li.close()
         _write(out, results)
@@ -84,6 +110,11 @@ def main():
     for r in results:
         by[r["status"]] = by.get(r["status"], 0) + 1
     log(f"done in {(time.time() - t0) / 60:.1f} min: {by}  -> {out / 'results.json'}")
+
+
+def _needs_refetch(r: dict) -> bool:
+    prof = r.get("profile") or {}
+    return bool(r.get("linkedin_url")) and not prof.get("fetched") and r.get("status") != "error"
 
 
 def _write(out: Path, results: list) -> None:
